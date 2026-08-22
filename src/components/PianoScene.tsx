@@ -72,6 +72,8 @@ const DEFAULT_NOTES: PianoNote[] = [
 ];
 
 const FREQS = [261.63, 293.66, 329.63, 349.23, 392.0, 440.0, 493.88, 523.25];
+/** Which white key lights up per note — the octave under the player's hand. */
+const KEY_FOR_NOTE = [14, 15, 16, 17, 18, 19, 20, 21];
 
 /**
  * Azimuth walks a full turn; elevation climbs over the spine side, where the
@@ -96,8 +98,11 @@ type Engine = {
   stage: Stage;
   tl: Timeline;
   cam: { az: number; el: number; dist: number; lid: number; paper: number };
+  /** Scroll position the page is at, and the damped one the camera follows. */
+  targetP: number;
+  shownP: number;
   active: number;
-  camDirty: boolean;
+  visible: boolean;
   openingDone: boolean;
   raf: number;
 };
@@ -130,43 +135,104 @@ export function PianoScene({
   const count = notes.length;
   const words = opening.split(' ');
 
-  /** One soft struck note per memory. Replaced by the album track when added. */
-  const playNote = useCallback((index: number) => {
-    if (mutedRef.current) return;
+  /**
+   * Mobile browsers only let an AudioContext start inside a user gesture, and
+   * only synchronously — anything after an `await` is already too late. So the
+   * context is created and resumed on the first touch anywhere on the page,
+   * long before a note is due.
+   */
+  const unlockAudio = useCallback(() => {
     const Ctx =
       window.AudioContext ??
       (window as unknown as { webkitAudioContext?: typeof AudioContext })
         .webkitAudioContext;
-    if (!Ctx) return;
-    audioRef.current = audioRef.current ?? new Ctx();
+    if (!Ctx) return null;
+    if (!audioRef.current) audioRef.current = new Ctx();
     const ctx = audioRef.current;
     if (ctx.state === 'suspended') void ctx.resume();
-
-    const t = ctx.currentTime;
-    const out = ctx.createGain();
-    out.gain.setValueAtTime(0.0001, t);
-    out.gain.exponentialRampToValueAtTime(0.11, t + 0.012);
-    out.gain.exponentialRampToValueAtTime(0.0001, t + 2.6);
-    const lp = ctx.createBiquadFilter();
-    lp.type = 'lowpass';
-    lp.frequency.value = 2400;
-    out.connect(lp).connect(ctx.destination);
-
-    [1, 2, 3].forEach((harmonic, n) => {
-      const osc = ctx.createOscillator();
-      osc.type = n === 0 ? 'triangle' : 'sine';
-      osc.frequency.value = FREQS[index % FREQS.length] * harmonic;
-      const gain = ctx.createGain();
-      gain.gain.value = [0.9, 0.22, 0.08][n];
-      osc.connect(gain).connect(out);
-      osc.start(t);
-      osc.stop(t + 2.8);
-    });
+    // iOS needs something to actually play before it counts the context as live.
+    const buffer = ctx.createBuffer(1, 1, 22050);
+    const source = ctx.createBufferSource();
+    source.buffer = buffer;
+    source.connect(ctx.destination);
+    source.start(0);
+    return ctx;
   }, []);
+
+  /** One soft struck note per memory. Replaced by the album track when added. */
+  const playNote = useCallback(
+    (index: number) => {
+      if (mutedRef.current) return;
+      const ctx = audioRef.current;
+      // Never build a note into a context the browser has not released yet;
+      // it would be dropped silently and the envelope timing would drift.
+      if (!ctx || ctx.state !== 'running') return;
+
+      const t = ctx.currentTime;
+      const out = ctx.createGain();
+      out.gain.setValueAtTime(0.0001, t);
+      out.gain.exponentialRampToValueAtTime(0.2, t + 0.012);
+      out.gain.exponentialRampToValueAtTime(0.0001, t + 2.6);
+
+      // Phone speakers have no bottom end, so the filter opens higher than it
+      // would on desktop or the note all but disappears.
+      const lp = ctx.createBiquadFilter();
+      lp.type = 'lowpass';
+      lp.frequency.value = 3400;
+      out.connect(lp).connect(ctx.destination);
+
+      [1, 2, 3, 4].forEach((harmonic, n) => {
+        const osc = ctx.createOscillator();
+        osc.type = n === 0 ? 'triangle' : 'sine';
+        osc.frequency.value = FREQS[index % FREQS.length] * harmonic;
+        // A struck string is never perfectly in tune with its own harmonics.
+        osc.detune.value = n * 2.5;
+        const gain = ctx.createGain();
+        gain.gain.value = [0.9, 0.26, 0.1, 0.04][n];
+        osc.connect(gain).connect(out);
+        osc.start(t);
+        osc.stop(t + 2.8);
+      });
+    },
+    [],
+  );
 
   useEffect(() => {
     mutedRef.current = muted;
   }, [muted]);
+
+  // First gesture anywhere unlocks audio. Kept until it takes: a touchstart
+  // during a scroll does not always count on iOS, so it may need a second try.
+  useEffect(() => {
+    const events: Array<keyof DocumentEventMap> = [
+      'pointerdown',
+      'touchend',
+      'keydown',
+    ];
+    const onGesture = () => {
+      const ctx = unlockAudio();
+      if (ctx && ctx.state === 'running') {
+        events.forEach((e) => document.removeEventListener(e, onGesture));
+      }
+    };
+    events.forEach((e) =>
+      document.addEventListener(e, onGesture, { passive: true }),
+    );
+
+    // Coming back from a background tab suspends the context again.
+    const onVisible = () => {
+      const ctx = audioRef.current;
+      if (document.visibilityState === 'visible' && ctx?.state === 'suspended') {
+        void ctx.resume();
+      }
+    };
+    document.addEventListener('visibilitychange', onVisible);
+
+    return () => {
+      events.forEach((e) => document.removeEventListener(e, onGesture));
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [unlockAudio]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -177,6 +243,7 @@ export function PianoScene({
     let stage: Stage | null = null;
     let onScroll: (() => void) | null = null;
     let onCurtain: (() => void) | null = null;
+    let io: IntersectionObserver | null = null;
 
     const spring = (anime: Anime, stiffness: number, damping: number) =>
       anime.createSpring({ stiffness, damping });
@@ -185,7 +252,7 @@ export function PianoScene({
     function buildTimeline(anime: Anime, cam: Engine['cam']): Timeline {
       const tl = anime.createTimeline({
         autoplay: false,
-        defaults: { duration: 1000, ease: 'inOutQuad' },
+        defaults: { duration: 1000, ease: 'inOutSine' },
       });
       tl.add(cam, { az: 12, el: 17, dist: 4.9 }, 0);
       SHOTS.slice(0, count).forEach((shot, i) => {
@@ -220,6 +287,22 @@ export function PianoScene({
       });
     }
 
+    /** Dip the white key the note belongs to, then let it rise back. */
+    function strikeKey(engine: Engine, noteIndex: number) {
+      const key = KEY_FOR_NOTE[noteIndex % KEY_FOR_NOTE.length];
+      if (key >= engine.stage.keyCount) return;
+      if (reduce) return;
+      const press = { v: 1 };
+      engine.anime.animate(press, {
+        v: 0,
+        duration: 620,
+        ease: 'outQuad',
+        onUpdate: () => {
+          engine.stage.setKeyDepth(key, press.v);
+        },
+      });
+    }
+
     function goToNote(engine: Engine, idx: number) {
       const { animate } = engine.anime;
       const prev = noteRefs.current[engine.active];
@@ -248,9 +331,7 @@ export function PianoScene({
       const counter = counterRef.current;
       if (counter) {
         counter.textContent =
-          idx === 0
-            ? 'Tám điều chưa nói'
-            : `Nốt 0${idx} / 0${count}`;
+          idx === 0 ? 'Tám điều chưa nói' : `Nốt 0${idx} / 0${count}`;
       }
 
       tickRefs.current.forEach((tick, i) => {
@@ -262,37 +343,63 @@ export function PianoScene({
         });
       });
 
-      if (idx > 0) playNote(idx - 1);
+      if (idx > 0) {
+        playNote(idx - 1);
+        strikeKey(engine, idx - 1);
+      }
     }
 
-    function tick(engine: Engine) {
+    function readScroll(engine: Engine) {
       const el = sectionRef.current;
       if (!el) return;
       const rect = el.getBoundingClientRect();
       const span = el.offsetHeight - window.innerHeight;
-      const p = Math.min(1, Math.max(0, -rect.top / Math.max(1, span)));
-      engine.tl.seek(p * engine.tl.duration);
-      engine.camDirty = true;
+      engine.targetP = Math.min(
+        1,
+        Math.max(0, -rect.top / Math.max(1, span)),
+      );
 
-      const idx = Math.min(count, Math.max(0, Math.floor(p * (count + 2))));
+      const idx = Math.min(
+        count,
+        Math.max(0, Math.floor(engine.targetP * (count + 2))),
+      );
       if (idx !== engine.active) goToNote(engine, idx);
-      if (p > 0.005) playOpening(engine);
+      if (engine.targetP > 0.005) playOpening(engine);
     }
 
-    function loop(engine: Engine) {
-      if (engine.camDirty) {
-        engine.camDirty = false;
-        engine.stage.setCamera(engine.cam.az, engine.cam.el, engine.cam.dist);
-        engine.stage.setLid(engine.cam.lid);
-        engine.stage.render();
-        const paper = paperRef.current;
-        if (paper) {
-          paper.style.opacity = String(
-            Math.max(0, Math.min(1, engine.cam.paper)),
-          );
-        }
+    /**
+     * The camera chases the scroll rather than snapping to it. Momentum scroll
+     * on a phone arrives in coarse jumps, and a camera that copies them frame
+     * for frame reads as stutter, not as speed.
+     */
+    function loop(engine: Engine, now: number) {
+      engine.raf = requestAnimationFrame((t) => loop(engine, t));
+      if (!engine.visible) return;
+
+      const gap = engine.targetP - engine.shownP;
+      const moving = Math.abs(gap) > 0.00002;
+      if (moving) engine.shownP += gap * (reduce ? 1 : 0.14);
+      else engine.shownP = engine.targetP;
+
+      engine.tl.seek(engine.shownP * engine.tl.duration);
+
+      // A stage that is perfectly still looks like a photograph. This is small
+      // enough to read as a held breath rather than as drift.
+      const breath = reduce ? 0 : 1;
+      engine.stage.setCamera(
+        engine.cam.az + Math.sin(now * 0.00026) * 0.75 * breath,
+        engine.cam.el + Math.sin(now * 0.00019) * 0.45 * breath,
+        engine.cam.dist,
+      );
+      engine.stage.setLid(engine.cam.lid);
+      engine.stage.render();
+
+      const paper = paperRef.current;
+      if (paper) {
+        paper.style.opacity = String(
+          Math.max(0, Math.min(1, engine.cam.paper)),
+        );
       }
-      engine.raf = requestAnimationFrame(() => loop(engine));
     }
 
     void (async () => {
@@ -312,31 +419,45 @@ export function PianoScene({
         stage,
         tl: buildTimeline(anime, cam),
         cam,
+        targetP: 0,
+        shownP: 0,
         active: 0,
-        camDirty: false,
+        visible: true,
         openingDone: false,
         raf: 0,
       };
       engineRef.current = engine;
 
-      onScroll = () => tick(engine);
+      onScroll = () => readScroll(engine);
       window.addEventListener('scroll', onScroll, { passive: true });
+
+      // Off-screen the loop idles: no point rendering a stage nobody can see.
+      io = new IntersectionObserver(
+        ([entry]) => {
+          engine.visible = entry.isIntersecting;
+        },
+        { threshold: 0 },
+      );
+      io.observe(section);
 
       // The curtain gate owns the first gesture, so the headline waits for it.
       onCurtain = () => {
         playOpening(engine);
         playNote(0);
+        strikeKey(engine, 0);
       };
       window.addEventListener('curtain:open', onCurtain);
 
-      tick(engine);
-      loop(engine);
+      readScroll(engine);
+      engine.shownP = engine.targetP;
+      loop(engine, 0);
     })();
 
     return () => {
       cancelled = true;
       if (onScroll) window.removeEventListener('scroll', onScroll);
       if (onCurtain) window.removeEventListener('curtain:open', onCurtain);
+      io?.disconnect();
       const engine = engineRef.current;
       if (engine) cancelAnimationFrame(engine.raf);
       engineRef.current = null;
@@ -348,7 +469,10 @@ export function PianoScene({
     const next = !muted;
     mutedRef.current = next;
     setMuted(next);
-    if (!next) playNote(0);
+    if (next) return;
+    // This click is a gesture, so it is the best chance to start the context.
+    unlockAudio();
+    playNote(0);
   }
 
   return (
