@@ -1,26 +1,100 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+/*
+  Design tokens lifted 1:1 from the Stitch project "Hành Trình Ký Ức"
+  (project 18147521225771987995). One locked light theme, one accent (gold).
+*/
+@theme {
+  --color-surface: #fcf9f8;
+  --color-surface-low: #f6f3f2;
+  --color-surface-high: #f0eded;
+  --color-surface-lowest: #ffffff;
+  --color-surface-dim: #dcd9d9;
+
+  --color-ink: #1b1c1c;
+  --color-ink-soft: #554240;
+  --color-ink-faint: #89726f;
+
+  --color-burgundy: #4a0404;
+  --color-burgundy-deep: #210000;
+  --color-burgundy-tint: #9d4139;
+
+  --color-gold: #cca830;
+  --color-gold-deep: #735c00;
+  --color-gold-pale: #ffe088;
+
+  --color-hairline: #dcc0bd;
+
+  /* The piano stage and the finale share one near-black; nothing else is dark. */
+  --color-stage: #0b0a09;
+  --color-stage-soft: #1a1614;
+
+  --font-serif-display: var(--font-eb-garamond), Georgia, serif;
+
+  --spacing-gutter: 1.5rem;
+  --spacing-stack: 3rem;
+
+  --radius-frame: 2px;
+
+  --ease-curtain: cubic-bezier(0.645, 0.045, 0.355, 1);
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+/* One radius system: 2px on every interactive surface, 0 on photography. */
+html {
+  scroll-behavior: smooth;
+  -webkit-tap-highlight-color: transparent;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background-color: var(--color-surface);
+  color: var(--color-ink);
+  font-family: var(--font-serif-display);
+  overflow-x: hidden;
+  text-rendering: optimizeLegibility;
+}
+
+/* Fixed paper-grain plate. Pointer-events off, never animated. */
+.paper-grain {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  pointer-events: none;
+  background-image: url('data:image/svg+xml;utf8,<svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg"><filter id="n"><feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="3" stitchTiles="stitch"/></filter><rect width="100%" height="100%" filter="url(%23n)" opacity="0.035"/></svg>');
+  mix-blend-mode: multiply;
+}
+
+/* Polaroid frame: white card, hairline edge, tinted shadow (never pure black). */
+.memory-frame {
+  background-color: var(--color-surface-lowest);
+  border: 1px solid rgb(220 192 189 / 0.6);
+  box-shadow: 0 20px 40px -18px rgb(74 4 4 / 0.18);
+}
+
+.handwritten {
+  font-style: italic;
+  letter-spacing: 0.01em;
+}
+
+::selection {
+  background-color: var(--color-gold-pale);
+  color: var(--color-burgundy);
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-gold-deep);
+  outline-offset: 3px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
 }
