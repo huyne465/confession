@@ -50,5 +50,6 @@ export type SiteConfig = {
   confessCaption: string;
   confessPrimaryCta: string;
   confessDenyCta: string;
+  musicUrl: string;
   footerText: string;
 };

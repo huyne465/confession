@@ -2,6 +2,7 @@
 // and material is named so the group stays readable (and exportable).
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 
 const CASE_LEN = 2.06;
 const HALF_W = 0.75;
@@ -20,8 +21,10 @@ const KEY_DIP = 0.045;
 export type PianoGroup = THREE.Group & {
   userData: {
     lidPivot: THREE.Group;
-    /** White keys, left to right, each on its own pivot at the far end. */
-    keyPivots: THREE.Group[];
+    /** All 36 white keys in one draw call; a press writes one instance matrix. */
+    whiteKeys: THREE.InstancedMesh;
+    /** Where each white key hinges, so a press can be rebuilt from scratch. */
+    keyOrigins: THREE.Vector3[];
   };
 };
 
@@ -33,7 +36,10 @@ export type StageOptions = {
   azimuth?: number;
   elevation?: number;
   distance?: number;
-  /** Trades shadow resolution and pixel ratio for frame rate. Auto-detected. */
+  /**
+   * 'low' drops real-time shadows, halves the curve tessellation and caps the
+   * pixel ratio. Auto-detected from the pointer type and the viewport.
+   */
   quality?: 'high' | 'low';
 };
 
@@ -45,6 +51,8 @@ export type Stage = {
   target: THREE.Vector3;
   /** How many white keys can be addressed by setKeyDepth. */
   keyCount: number;
+  /** What the stage settled on, so the caller can pace its own loop to match. */
+  quality: 'high' | 'low';
   /** Orbit the camera: azimuth/elevation in degrees, distance in world units. */
   setCamera: (azDeg: number, elDeg: number, dist: number) => void;
   /** Lid hinge angle in radians: 0.85 wide open, 0 shut. */
@@ -186,7 +194,7 @@ function contactShadow(): THREE.Mesh {
   return mesh;
 }
 
-export function buildPiano(): PianoGroup {
+export function buildPiano(low = false): PianoGroup {
   const M: Materials = mats();
   const piano = new THREE.Group();
   piano.name = 'grand-piano';
@@ -198,13 +206,14 @@ export function buildPiano(): PianoGroup {
     name: string,
     y: number,
   ): THREE.Mesh => {
+    // The case curve is the most expensive geometry in the scene by far.
     const geo = new THREE.ExtrudeGeometry(shape, {
       depth,
-      curveSegments: 48,
+      curveSegments: low ? 22 : 48,
       bevelEnabled: true,
       bevelThickness: 0.01,
       bevelSize: 0.008,
-      bevelSegments: 3,
+      bevelSegments: low ? 1 : 3,
     });
     geo.rotateX(-Math.PI / 2);
     const mesh = new THREE.Mesh(geo, material);
@@ -215,7 +224,7 @@ export function buildPiano(): PianoGroup {
 
   // Rim: outer wall with the top open so the soundboard reads under the lid.
   const rim = caseShape();
-  rim.holes.push(new THREE.Path().setFromPoints(caseShape(0.062).getPoints(80)));
+  rim.holes.push(new THREE.Path().setFromPoints(caseShape(0.062).getPoints(low ? 40 : 80)));
   piano.add(extrude(rim, RIM_H, M.ebony, 'case-rim', CASE_Y));
   piano.add(extrude(caseShape(0.01), 0.022, M.ebonySoft, 'case-bottom', CASE_Y));
   piano.add(extrude(caseShape(0.075), 0.012, M.board, 'soundboard', CASE_Y + 0.05));
@@ -223,31 +232,29 @@ export function buildPiano(): PianoGroup {
   // Bridge: the curved rib the strings cross. A ring, not a plate — a filled
   // shape here would just read as a second soundboard sitting on the first.
   const bridgeShape = caseShape(0.2);
-  bridgeShape.holes.push(new THREE.Path().setFromPoints(caseShape(0.26).getPoints(64)));
+  bridgeShape.holes.push(new THREE.Path().setFromPoints(caseShape(0.26).getPoints(low ? 32 : 64)));
   piano.add(extrude(bridgeShape, 0.018, M.board, 'bridge', CASE_Y + 0.062));
 
-  const strings = new THREE.Group();
+  // 26 strings, one draw call: identical boxes differing only by their matrix.
+  const STRING_COUNT = 26;
+  const strings = new THREE.InstancedMesh(
+    new THREE.BoxGeometry(1, 1, 1),
+    M.stringWire,
+    STRING_COUNT,
+  );
   strings.name = 'strings';
-  for (let i = 0; i < 26; i++) {
-    const t = i / 25;
+  const scratch = new THREE.Matrix4();
+  for (let i = 0; i < STRING_COUNT; i++) {
+    const t = i / (STRING_COUNT - 1);
     const len = 1.36 - t * 0.88;
     // Bass strings are wound and visibly thicker than the treble.
     const gauge = 0.0062 - t * 0.0032;
-    const s = new THREE.Mesh(
-      new THREE.BoxGeometry(gauge, 0.0022, len),
-      M.stringWire,
-    );
-    s.name = `string-${i}`;
-    s.position.set(-0.62 + t * 1.24, CASE_Y + 0.088, -0.42 - len / 2);
-    strings.add(s);
+    scratch.makeScale(gauge, 0.0022, len);
+    scratch.setPosition(-0.62 + t * 1.24, CASE_Y + 0.088, -0.42 - len / 2);
+    strings.setMatrixAt(i, scratch);
   }
+  strings.instanceMatrix.needsUpdate = true;
   piano.add(strings);
-
-  // Keyboard. Each white key hangs off a pivot at its far end so a struck key
-  // tips the way a real one does instead of sinking straight down.
-  const keys = new THREE.Group();
-  keys.name = 'keyboard';
-  const keyPivots: THREE.Group[] = [];
 
   const keyBed = new THREE.Mesh(new THREE.BoxGeometry(1.42, 0.03, 0.2), M.ebonySoft);
   keyBed.name = 'key-bed';
@@ -259,38 +266,49 @@ export function buildPiano(): PianoGroup {
   feltStrip.position.set(0, KEY_Y + 0.004, -0.192);
   piano.add(feltStrip);
 
+  // Keyboard. A key and its front lip are one geometry, and all 36 white keys
+  // are one instanced mesh: they differ by a matrix, which is exactly what
+  // instancing is for. A press rewrites one matrix rather than moving a node.
+  const keyTop = new THREE.BoxGeometry(KEY_W * 0.92, 0.021, 0.148);
+  keyTop.translate(0, 0, 0.074);
+  const keyLip = new THREE.BoxGeometry(KEY_W * 0.92, 0.016, 0.008);
+  keyLip.translate(0, -0.004, 0.152);
+  const whiteGeo = mergeGeometries([keyTop, keyLip]) ?? keyTop;
+
+  const whiteKeys = new THREE.InstancedMesh(whiteGeo, M.ivory, WHITE_KEYS);
+  whiteKeys.name = 'white-keys';
+  const keyOrigins: THREE.Vector3[] = [];
+  const keyMatrix = new THREE.Matrix4();
+
+  const blackAt: number[] = [];
   for (let i = 0; i < WHITE_KEYS; i++) {
-    const pivot = new THREE.Group();
-    pivot.name = `key-pivot-${i}`;
     // Hinge at the back of the key, where the balance rail sits.
-    pivot.position.set(-0.64 + KEY_W * (i + 0.5), KEY_Y, -0.189);
-
-    const k = new THREE.Mesh(new THREE.BoxGeometry(KEY_W * 0.92, 0.021, 0.148), M.ivory);
-    k.name = `white-${i}`;
-    k.position.set(0, 0, 0.074);
-    pivot.add(k);
-
-    // The front lip that catches the key light along the whole keyboard.
-    const lip = new THREE.Mesh(
-      new THREE.BoxGeometry(KEY_W * 0.92, 0.016, 0.008),
-      M.ivory,
-    );
-    lip.name = `white-lip-${i}`;
-    lip.position.set(0, -0.004, 0.152);
-    pivot.add(lip);
-
-    keys.add(pivot);
-    keyPivots.push(pivot);
+    const origin = new THREE.Vector3(-0.64 + KEY_W * (i + 0.5), KEY_Y, -0.189);
+    keyOrigins.push(origin);
+    keyMatrix.identity().setPosition(origin);
+    whiteKeys.setMatrixAt(i, keyMatrix);
 
     const step = i % 7;
     if (i < WHITE_KEYS - 1 && (step === 0 || step === 1 || step === 3 || step === 4 || step === 5)) {
-      const b = new THREE.Mesh(new THREE.BoxGeometry(KEY_W * 0.58, 0.019, 0.095), M.ebony);
-      b.name = `black-${i}`;
-      b.position.set(-0.64 + KEY_W * (i + 1), KEY_Y + 0.02, -0.145);
-      keys.add(b);
+      blackAt.push(-0.64 + KEY_W * (i + 1));
     }
   }
-  piano.add(keys);
+  whiteKeys.instanceMatrix.needsUpdate = true;
+  whiteKeys.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+  piano.add(whiteKeys);
+
+  const blackKeys = new THREE.InstancedMesh(
+    new THREE.BoxGeometry(KEY_W * 0.58, 0.019, 0.095),
+    M.ebony,
+    blackAt.length,
+  );
+  blackKeys.name = 'black-keys';
+  blackAt.forEach((x, i) => {
+    keyMatrix.identity().setPosition(x, KEY_Y + 0.02, -0.145);
+    blackKeys.setMatrixAt(i, keyMatrix);
+  });
+  blackKeys.instanceMatrix.needsUpdate = true;
+  piano.add(blackKeys);
 
   // Cheek blocks close the keyboard off at both ends.
   [-0.685, 0.685].forEach((x, i) => {
@@ -412,15 +430,19 @@ export function buildPiano(): PianoGroup {
   wrap.name = 'piano';
   wrap.add(piano);
   wrap.userData.lidPivot = lidPivot;
-  wrap.userData.keyPivots = keyPivots;
+  wrap.userData.whiteKeys = whiteKeys;
+  wrap.userData.keyOrigins = keyOrigins;
   return wrap;
 }
 
 /** Dark stage: one spotlight pool, a cool rim, a warm glow inside the case. */
 export function createStage(canvas: HTMLCanvasElement, opts: StageOptions = {}): Stage {
+  // Safari does not report hardwareConcurrency at all, so a core count is not
+  // a heuristic that works where it is most needed. A coarse pointer on a
+  // narrow viewport is a phone, and a phone is the machine to be careful on.
   const quality =
     opts.quality ??
-    (window.innerWidth < 768 || (navigator.hardwareConcurrency ?? 8) <= 4
+    (window.matchMedia?.('(pointer: coarse)').matches || window.innerWidth < 900
       ? 'low'
       : 'high');
   const low = quality === 'low';
@@ -431,8 +453,11 @@ export function createStage(canvas: HTMLCanvasElement, opts: StageOptions = {}):
     preserveDrawingBuffer: true,
     powerPreference: 'high-performance',
   });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, low ? 1.6 : 2));
-  renderer.shadowMap.enabled = true;
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, low ? 1.25 : 2));
+  // A phone renders this every frame of a scroll. A shadow map is a second
+  // pass over the whole scene for one soft edge, and the painted contact
+  // shadow already carries the weight of the case.
+  renderer.shadowMap.enabled = !low;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = opts.exposure ?? 1.15;
@@ -468,19 +493,21 @@ export function createStage(canvas: HTMLCanvasElement, opts: StageOptions = {}):
   floor.receiveShadow = true;
   scene.add(floor);
 
-  const piano = buildPiano();
+  const piano = buildPiano(low);
   scene.add(piano);
   scene.add(contactShadow());
 
   const spot = new THREE.SpotLight(0xfff2da, 620, 26, 0.68, 0.9, 2);
   spot.position.set(1.5, 5.8, 3.2);
-  spot.castShadow = true;
-  spot.shadow.mapSize.set(low ? 1024 : 2048, low ? 1024 : 2048);
-  spot.shadow.bias = -0.0006;
-  spot.shadow.normalBias = 0.022;
-  spot.shadow.radius = low ? 2 : 4;
-  spot.shadow.camera.near = 0.6;
-  spot.shadow.camera.far = 22;
+  spot.castShadow = !low;
+  if (!low) {
+    spot.shadow.mapSize.set(2048, 2048);
+    spot.shadow.bias = -0.0006;
+    spot.shadow.normalBias = 0.022;
+    spot.shadow.radius = 4;
+    spot.shadow.camera.near = 0.6;
+    spot.shadow.camera.far = 22;
+  }
   scene.add(spot);
   scene.add(spot.target);
 
@@ -489,9 +516,13 @@ export function createStage(canvas: HTMLCanvasElement, opts: StageOptions = {}):
   rim.position.set(-3.4, 2.4, -3.2);
   scene.add(rim);
 
-  const fill = new THREE.DirectionalLight(0xffe6c2, 0.34);
-  fill.position.set(3.2, 1.9, 3.4);
-  scene.add(fill);
+  // Every light is a full pass over every lit fragment. On a phone the fill is
+  // the one that can go: the rim is what reads, the fill only softens.
+  if (!low) {
+    const fill = new THREE.DirectionalLight(0xffe6c2, 0.34);
+    fill.position.set(3.2, 1.9, 3.4);
+    scene.add(fill);
+  }
 
   // Warm bounce inside the open case, where the soundboard catches the light.
   const inner = new THREE.PointLight(0xffc98a, 2.6, 3.6, 2);
@@ -520,12 +551,18 @@ export function createStage(canvas: HTMLCanvasElement, opts: StageOptions = {}):
     camera.lookAt(target);
   }
 
-  const keyPivots = piano.userData.keyPivots;
+  const { whiteKeys, keyOrigins } = piano.userData;
+  const pressMatrix = new THREE.Matrix4();
 
   function setKeyDepth(index: number, depth: number) {
-    const pivot = keyPivots[index];
-    if (!pivot) return;
-    pivot.rotation.x = Math.max(0, Math.min(1, depth)) * KEY_DIP;
+    const origin = keyOrigins[index];
+    if (!origin) return;
+    // The geometry is authored around the hinge, so a press is a rotation about
+    // the instance origin and nothing else.
+    pressMatrix.makeRotationX(Math.max(0, Math.min(1, depth)) * KEY_DIP);
+    pressMatrix.setPosition(origin);
+    whiteKeys.setMatrixAt(index, pressMatrix);
+    whiteKeys.instanceMatrix.needsUpdate = true;
   }
 
   function resize() {
@@ -556,7 +593,8 @@ export function createStage(canvas: HTMLCanvasElement, opts: StageOptions = {}):
     piano,
     renderer,
     target,
-    keyCount: keyPivots.length,
+    quality,
+    keyCount: keyOrigins.length,
     setCamera,
     setLid(rad: number) {
       piano.userData.lidPivot.rotation.z = rad;

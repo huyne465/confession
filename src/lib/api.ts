@@ -60,6 +60,7 @@ export const DEFAULT_CONFIG: SiteConfig = {
   confessCaption: 'Forever Yours',
   confessPrimaryCta: 'Đồng ý',
   confessDenyCta: 'Để anh nghĩ thêm',
+  musicUrl: '',
   footerText: 'Mãi mãi bên nhau',
 };
 

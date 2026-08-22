@@ -20,7 +20,7 @@ export default async function Home() {
 
   return (
     <CurtainGate question={config.gateQuestion} hint={config.gateHint}>
-      <PianoScene />
+      <PianoScene musicUrl={config.musicUrl} />
       <SiteNav title={config.siteTitle} />
       <main className="relative bg-surface">
         <JourneyTimeline

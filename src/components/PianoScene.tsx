@@ -3,6 +3,7 @@
 import { SpeakerHighIcon, SpeakerSlashIcon } from '@phosphor-icons/react/dist/ssr';
 import { useReducedMotion } from 'motion/react';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { assetUrl } from '@/lib/api';
 import { createStage, type Stage } from '@/lib/piano-3d';
 
 type Anime = typeof import('animejs');
@@ -23,6 +24,8 @@ type Props = {
   sceneLength?: number;
   /** Start silent. The reader can still unmute from the stage. */
   startMuted?: boolean;
+  /** Loops once the reader is past the last note. Empty means no music. */
+  musicUrl?: string;
 };
 
 const DEFAULT_OPENING =
@@ -72,6 +75,18 @@ const DEFAULT_NOTES: PianoNote[] = [
 ];
 
 const FREQS = [261.63, 293.66, 329.63, 349.23, 392.0, 440.0, 493.88, 523.25];
+
+/**
+ * Struck-piano samples, rendered offline. Oscillators built one note at a time
+ * on a phone CPU is what made the scene buzz: four voices per note, several
+ * notes overlapping, and nothing between them and the output but hope.
+ */
+const NOTE_FILES = ['c4', 'd4', 'e4', 'f4', 'g4', 'a4', 'b4', 'c5'].map(
+  (n) => `/assets/media/notes/${n}.mp3`,
+);
+
+/** Once the lid starts closing, the album has begun and the track comes in. */
+const MUSIC_AT = 0.9;
 /** Which white key lights up per note — the octave under the player's hand. */
 const KEY_FOR_NOTE = [14, 15, 16, 17, 18, 19, 20, 21];
 
@@ -104,6 +119,13 @@ type Engine = {
   active: number;
   visible: boolean;
   openingDone: boolean;
+  /** A key is mid-press, so the frame has something to show even at rest. */
+  keysMoving: boolean;
+  /** The camera has caught up with the scroll and has nothing left to draw. */
+  settled: boolean;
+  /** Milliseconds between frames, or 0 for as fast as the display allows. */
+  minFrame: number;
+  lastFrame: number;
   raf: number;
 };
 
@@ -117,6 +139,7 @@ export function PianoScene({
   notes = DEFAULT_NOTES,
   sceneLength = 1,
   startMuted = false,
+  musicUrl = '',
 }: Props) {
   const sectionRef = useRef<HTMLElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -127,10 +150,15 @@ export function PianoScene({
   const wordRefs = useRef<Array<HTMLSpanElement | null>>([]);
   const engineRef = useRef<Engine | null>(null);
   const audioRef = useRef<AudioContext | null>(null);
+  const busRef = useRef<GainNode | null>(null);
+  const samplesRef = useRef<Array<AudioBuffer | null>>([]);
+  const musicRef = useRef<HTMLAudioElement | null>(null);
+  const musicOnRef = useRef(false);
   const mutedRef = useRef(startMuted);
 
   const [muted, setMuted] = useState(startMuted);
   const [audioState, setAudioState] = useState('none');
+  const [musicPlaying, setMusicPlaying] = useState(false);
   const [debug, setDebug] = useState(false);
   const reduce = useReducedMotion();
 
@@ -160,8 +188,38 @@ export function PianoScene({
       // Safari flips to its non-standard 'interrupted' on its own — after a
       // call, a route change, or a background. Watch rather than assume.
       created.onstatechange = () => setAudioState(created.state);
+
+      // Everything goes through one bus into a limiter. Notes overlap — each
+      // rings for nearly three seconds — and without a ceiling the sum clips,
+      // which is the buzz you hear rather than any fault in the notes.
+      const bus = created.createGain();
+      bus.gain.value = 0.9;
+      const limiter = created.createDynamicsCompressor();
+      limiter.threshold.value = -8;
+      limiter.knee.value = 0;
+      limiter.ratio.value = 20;
+      limiter.attack.value = 0.003;
+      limiter.release.value = 0.25;
+      bus.connect(limiter).connect(created.destination);
+      busRef.current = bus;
+
+      void loadSamples(created);
     }
     const ctx = audioRef.current;
+
+    // An <audio> element has its own permission. Touching play() inside this
+    // same gesture is what buys the right to start it programmatically later.
+    const music = musicRef.current;
+    if (music && !musicOnRef.current) {
+      void music
+        .play()
+        .then(() => {
+          if (!musicOnRef.current) music.pause();
+        })
+        .catch(() => {
+          // Refused. The scroll trigger will try again from its own gesture.
+        });
+    }
     // Anything that is not 'running' is worth a resume, including Safari's
     // 'interrupted', which is not in the spec and which no === check will catch.
     if (ctx.state !== 'running') void ctx.resume().then(() => setAudioState(ctx.state));
@@ -175,7 +233,24 @@ export function PianoScene({
     return ctx;
   }, []);
 
-  /** One soft struck note per memory. Replaced by the album track when added. */
+  /** Fetch the eight samples once, in parallel, and forget the failures. */
+  const loadSamples = useCallback(async (ctx: AudioContext) => {
+    samplesRef.current = await Promise.all(
+      NOTE_FILES.map(async (file) => {
+        try {
+          const res = await fetch(assetUrl(file));
+          if (!res.ok) return null;
+          return await ctx.decodeAudioData(await res.arrayBuffer());
+        } catch {
+          // A missing sample is not worth breaking the scene over; the
+          // oscillator fallback below still makes a sound.
+          return null;
+        }
+      }),
+    );
+  }, []);
+
+  /** One struck note per memory: the sample if it arrived, synthesis if not. */
   const playNote = useCallback(
     (index: number) => {
       if (mutedRef.current) return;
@@ -183,6 +258,21 @@ export function PianoScene({
       // context can be built outside one, and this is the last chance to notice.
       const ctx = audioRef.current ?? unlockAudio();
       if (!ctx) return;
+      const bus: AudioNode = busRef.current ?? ctx.destination;
+
+      const sample = samplesRef.current[index % NOTE_FILES.length];
+      if (sample) {
+        if (ctx.state !== 'running') {
+          void ctx.resume().then(() => setAudioState(ctx.state));
+        }
+        const source = ctx.createBufferSource();
+        source.buffer = sample;
+        const gain = ctx.createGain();
+        gain.gain.value = 0.85;
+        source.connect(gain).connect(bus);
+        source.start();
+        return;
+      }
       // Nudge, do not gate. A previous version refused unless the state read
       // exactly 'running', which silenced Safari for good: it parks contexts in
       // 'interrupted', and resume() needs a tick before the state catches up.
@@ -203,7 +293,7 @@ export function PianoScene({
       const lp = ctx.createBiquadFilter();
       lp.type = 'lowpass';
       lp.frequency.value = 3400;
-      out.connect(lp).connect(ctx.destination);
+      out.connect(lp).connect(bus);
 
       [1, 2, 3, 4].forEach((harmonic, n) => {
         const osc = ctx.createOscillator();
@@ -223,7 +313,36 @@ export function PianoScene({
 
   useEffect(() => {
     mutedRef.current = muted;
+    const music = musicRef.current;
+    if (!music) return;
+    if (muted) music.pause();
+    else if (musicOnRef.current) void music.play().catch(() => {});
   }, [muted]);
+
+  /** Bring the track up over a couple of seconds rather than dropping it in. */
+  const startMusic = useCallback(() => {
+    const music = musicRef.current;
+    if (!music || musicOnRef.current || mutedRef.current || !musicUrl) return;
+    musicOnRef.current = true;
+    music.volume = 0;
+    void music
+      .play()
+      .then(() => {
+        setMusicPlaying(true);
+        const target = 0.5;
+        const started = performance.now();
+        const ramp = () => {
+          const t = Math.min(1, (performance.now() - started) / 2600);
+          music.volume = target * t;
+          if (t < 1 && !music.paused) requestAnimationFrame(ramp);
+        };
+        requestAnimationFrame(ramp);
+      })
+      .catch(() => {
+        // Refused without a gesture. The sound toggle is the way back in.
+        musicOnRef.current = false;
+      });
+  }, [musicUrl]);
 
   // First gesture anywhere unlocks audio. Kept until it takes: a touchstart
   // during a scroll does not always count on iOS, so it may need a second try.
@@ -323,12 +442,17 @@ export function PianoScene({
       if (key >= engine.stage.keyCount) return;
       if (reduce) return;
       const press = { v: 1 };
+      engine.keysMoving = true;
       engine.anime.animate(press, {
         v: 0,
         duration: 620,
         ease: 'outQuad',
         onUpdate: () => {
           engine.stage.setKeyDepth(key, press.v);
+          engine.settled = false;
+        },
+        onComplete: () => {
+          engine.keysMoving = false;
         },
       });
     }
@@ -395,6 +519,7 @@ export function PianoScene({
       );
       if (idx !== engine.active) goToNote(engine, idx);
       if (engine.targetP > 0.005) playOpening(engine);
+      if (engine.targetP > MUSIC_AT) startMusic();
     }
 
     /**
@@ -406,19 +531,29 @@ export function PianoScene({
       engine.raf = requestAnimationFrame((t) => loop(engine, t));
       if (!engine.visible) return;
 
+      // A phone that renders this at 60 costs twice the battery and drops
+      // frames anyway. Half rate, evenly spaced, reads as smoother than an
+      // uneven 60 ever does.
+      if (engine.minFrame > 0) {
+        if (now - engine.lastFrame < engine.minFrame) return;
+        engine.lastFrame = now;
+      }
+
       const gap = engine.targetP - engine.shownP;
       const moving = Math.abs(gap) > 0.00002;
       if (moving) engine.shownP += gap * (reduce ? 1 : 0.14);
       else engine.shownP = engine.targetP;
 
-      engine.tl.seek(engine.shownP * engine.tl.duration);
+      // A stage that is perfectly still looks like a photograph — but only a
+      // machine with frames to spare gets to spend them on breathing.
+      const breathing = !reduce && engine.stage.quality === 'high';
+      if (!moving && !breathing && !engine.keysMoving && engine.settled) return;
+      engine.settled = !moving;
 
-      // A stage that is perfectly still looks like a photograph. This is small
-      // enough to read as a held breath rather than as drift.
-      const breath = reduce ? 0 : 1;
+      engine.tl.seek(engine.shownP * engine.tl.duration);
       engine.stage.setCamera(
-        engine.cam.az + Math.sin(now * 0.00026) * 0.75 * breath,
-        engine.cam.el + Math.sin(now * 0.00019) * 0.45 * breath,
+        engine.cam.az + (breathing ? Math.sin(now * 0.00026) * 0.75 : 0),
+        engine.cam.el + (breathing ? Math.sin(now * 0.00019) * 0.45 : 0),
         engine.cam.dist,
       );
       engine.stage.setLid(engine.cam.lid);
@@ -454,6 +589,10 @@ export function PianoScene({
         active: 0,
         visible: true,
         openingDone: false,
+        keysMoving: false,
+        settled: false,
+        minFrame: stage.quality === 'low' ? 1000 / 30 : 0,
+        lastFrame: 0,
         raf: 0,
       };
       engineRef.current = engine;
@@ -493,7 +632,7 @@ export function PianoScene({
       engineRef.current = null;
       stage?.dispose();
     };
-  }, [count, playNote, reduce]);
+  }, [count, playNote, reduce, startMusic]);
 
   function toggleSound() {
     const next = !muted;
@@ -502,10 +641,36 @@ export function PianoScene({
     if (next) return;
     // This click is a gesture, so it is the best chance to start the context.
     unlockAudio();
-    playNote(0);
+    // Unmuting after the trigger point should bring the track back, not a note.
+    if (musicOnRef.current || (engineRef.current?.targetP ?? 0) > MUSIC_AT) {
+      musicOnRef.current = false;
+      startMusic();
+    } else {
+      playNote(0);
+    }
   }
 
   return (
+    <>
+    {musicUrl ? (
+      // preload="none" keeps 700KB off the first paint; nothing needs it until
+      // the reader is eight notes deep.
+      <audio ref={musicRef} src={assetUrl(musicUrl)} loop preload="none" />
+    ) : null}
+
+    {/* Once music is playing it outlives this section, so the way to silence
+        it has to outlive the section too. */}
+    {musicPlaying ? (
+      <button
+        type="button"
+        onClick={toggleSound}
+        aria-label={muted ? 'Bật tiếng' : 'Tắt tiếng'}
+        className="fixed right-4 bottom-4 z-40 grid h-11 w-11 place-items-center rounded-full border border-gold/45 bg-stage/80 text-gold shadow-[0_10px_30px_-12px_rgb(0_0_0/0.8)] backdrop-blur-sm transition-colors duration-300 hover:bg-gold/15"
+      >
+        {muted ? <SpeakerSlashIcon size={17} /> : <SpeakerHighIcon size={17} />}
+      </button>
+    ) : null}
+
     <section
       id="san-khau"
       ref={sectionRef}
@@ -636,5 +801,6 @@ export function PianoScene({
         </div>
       </div>
     </section>
+    </>
   );
 }

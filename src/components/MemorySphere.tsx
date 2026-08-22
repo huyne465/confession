@@ -96,7 +96,18 @@ export function MemorySphere({ title, intro, items }: Props) {
   const rafRef = useRef(0);
 
   const [focus, setFocus] = useState(-1);
+  const [low, setLow] = useState(false);
+  const lowRef = useRef(false);
   const reduce = useReducedMotion();
+
+  // A coarse pointer on a narrow viewport is a phone. Safari reports no core
+  // count, so that is the only signal available where it actually matters.
+  useEffect(() => {
+    const phone =
+      window.matchMedia?.('(pointer: coarse)').matches || window.innerWidth < 900;
+    lowRef.current = phone;
+    setLow(phone);
+  }, []);
 
   const spots = placements(items.length);
 
@@ -147,7 +158,12 @@ export function MemorySphere({ title, intro, items }: Props) {
         // filter and z-index are not. Quantise them and skip the write when the
         // value has not actually moved — this is what a slow spin costs.
         const prev = appliedRef.current[i];
-        const blur = isFocus ? 0 : Math.round(((1 - near) * 5 + 0.4) * 4) / 4;
+        // Every blurred element needs its own offscreen buffer. Twenty-five of
+        // them is what an iPhone X cannot afford, so depth is carried by scale
+        // and opacity alone there — both of which the compositor does for free.
+        const blur = lowRef.current || isFocus
+          ? 0
+          : Math.round(((1 - near) * 5 + 0.4) * 4) / 4;
         const opacity = Math.round((0.22 + near * 0.78) * 50) / 50;
         const z = Math.round(near * 60);
 
@@ -420,19 +436,30 @@ export function MemorySphere({ title, intro, items }: Props) {
                   flat layers: clipping them would flatten the 3D underneath. */}
               {!reduce ? (
                 <div aria-hidden="true" className="globe-snow">
-                  {SNOW.map((flake, i) => (
+                  {(low ? SNOW.slice(0, 18) : SNOW).map((flake, i) => (
+                    // Two nested spans, because one element cannot run two
+                    // animations on transform — and animating `top` instead
+                    // would put every flake through layout on every frame.
                     <span
                       key={i}
+                      className="flake"
                       style={{
                         left: `${flake.left}%`,
-                        width: flake.size,
-                        height: flake.size,
-                        opacity: flake.opacity,
-                        animationDuration: `${flake.duration}s, ${flake.sway}s`,
-                        animationDelay: `${flake.delay}s, ${flake.delay}s`,
-                        ['--drift' as string]: `${flake.drift}px`,
+                        animationDuration: `${flake.duration}s`,
+                        animationDelay: `${flake.delay}s`,
                       }}
-                    />
+                    >
+                      <i
+                        style={{
+                          width: flake.size,
+                          height: flake.size,
+                          opacity: flake.opacity,
+                          animationDuration: `${flake.sway}s`,
+                          animationDelay: `${flake.delay}s`,
+                          ['--drift' as string]: `${flake.drift}px`,
+                        }}
+                      />
+                    </span>
                   ))}
                 </div>
               ) : null}
@@ -536,7 +563,8 @@ export function MemorySphere({ title, intro, items }: Props) {
             0 0 0 1px rgba(252, 249, 248, 0.14),
             0 8px 22px -10px rgba(0, 0, 0, 0.9);
           backface-visibility: hidden;
-          will-change: transform, opacity;
+          /* No will-change: promoting twenty-five tiles to their own layers
+             costs more texture memory than the repaint it saves. */
           cursor: pointer;
         }
 
@@ -572,18 +600,25 @@ export function MemorySphere({ title, intro, items }: Props) {
           overflow: hidden;
           border-radius: 9999px;
           pointer-events: none;
+          --fall: 120%;
         }
 
-        .globe-snow span {
+        .globe-snow .flake {
           position: absolute;
           top: -8%;
+          animation-name: flake-fall;
+          animation-timing-function: linear;
+          animation-iteration-count: infinite;
+        }
+
+        .globe-snow .flake i {
+          display: block;
           border-radius: 9999px;
           background: #f2f7ff;
           box-shadow: 0 0 4px rgba(226, 240, 255, 0.7);
-          will-change: transform;
-          animation-name: flake-fall, flake-sway;
-          animation-timing-function: linear, ease-in-out;
-          animation-iteration-count: infinite, infinite;
+          animation-name: flake-sway;
+          animation-timing-function: ease-in-out;
+          animation-iteration-count: infinite;
         }
 
         /* The drift the snow settles into, at the foot of the glass. */
@@ -722,12 +757,14 @@ export function MemorySphere({ title, intro, items }: Props) {
           }
         }
 
+        /* translate, not top. Animating top is layout, and layout on 42
+           elements every frame is what turns a globe into a slideshow. */
         @keyframes flake-fall {
           from {
-            top: -8%;
+            transform: translate3d(0, 0, 0);
           }
           to {
-            top: 104%;
+            transform: translate3d(0, var(--fall), 0);
           }
         }
 
