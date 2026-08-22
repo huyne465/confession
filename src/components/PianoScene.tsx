@@ -130,10 +130,14 @@ export function PianoScene({
   const mutedRef = useRef(startMuted);
 
   const [muted, setMuted] = useState(startMuted);
+  const [audioState, setAudioState] = useState('none');
+  const [debug, setDebug] = useState(false);
   const reduce = useReducedMotion();
 
   const count = notes.length;
   const words = opening.split(' ');
+  /** Sound can only actually come out of a context the browser has started. */
+  const live = audioState === 'running';
 
   /**
    * Mobile browsers only let an AudioContext start inside a user gesture, and
@@ -146,16 +150,28 @@ export function PianoScene({
       window.AudioContext ??
       (window as unknown as { webkitAudioContext?: typeof AudioContext })
         .webkitAudioContext;
-    if (!Ctx) return null;
-    if (!audioRef.current) audioRef.current = new Ctx();
+    if (!Ctx) {
+      setAudioState('unsupported');
+      return null;
+    }
+    if (!audioRef.current) {
+      const created = new Ctx();
+      audioRef.current = created;
+      // Safari flips to its non-standard 'interrupted' on its own — after a
+      // call, a route change, or a background. Watch rather than assume.
+      created.onstatechange = () => setAudioState(created.state);
+    }
     const ctx = audioRef.current;
-    if (ctx.state === 'suspended') void ctx.resume();
+    // Anything that is not 'running' is worth a resume, including Safari's
+    // 'interrupted', which is not in the spec and which no === check will catch.
+    if (ctx.state !== 'running') void ctx.resume().then(() => setAudioState(ctx.state));
     // iOS needs something to actually play before it counts the context as live.
     const buffer = ctx.createBuffer(1, 1, 22050);
     const source = ctx.createBufferSource();
     source.buffer = buffer;
     source.connect(ctx.destination);
     source.start(0);
+    setAudioState(ctx.state);
     return ctx;
   }, []);
 
@@ -163,10 +179,18 @@ export function PianoScene({
   const playNote = useCallback(
     (index: number) => {
       if (mutedRef.current) return;
-      const ctx = audioRef.current;
-      // Never build a note into a context the browser has not released yet;
-      // it would be dropped silently and the envelope timing would drift.
-      if (!ctx || ctx.state !== 'running') return;
+      // If no gesture ever reached the unlock listener, try here: on desktop a
+      // context can be built outside one, and this is the last chance to notice.
+      const ctx = audioRef.current ?? unlockAudio();
+      if (!ctx) return;
+      // Nudge, do not gate. A previous version refused unless the state read
+      // exactly 'running', which silenced Safari for good: it parks contexts in
+      // 'interrupted', and resume() needs a tick before the state catches up.
+      // A note scheduled into a context that never wakes is merely inaudible;
+      // refusing to schedule one guarantees it.
+      if (ctx.state !== 'running') {
+        void ctx.resume().then(() => setAudioState(ctx.state));
+      }
 
       const t = ctx.currentTime;
       const out = ctx.createGain();
@@ -194,7 +218,7 @@ export function PianoScene({
         osc.stop(t + 2.8);
       });
     },
-    [],
+    [unlockAudio],
   );
 
   useEffect(() => {
@@ -204,9 +228,14 @@ export function PianoScene({
   // First gesture anywhere unlocks audio. Kept until it takes: a touchstart
   // during a scroll does not always count on iOS, so it may need a second try.
   useEffect(() => {
+    // Every event the HTML spec counts as activation-triggering. touchend is
+    // here because a tap that turns into a scroll never produces a click.
     const events: Array<keyof DocumentEventMap> = [
       'pointerdown',
+      'pointerup',
       'touchend',
+      'mousedown',
+      'click',
       'keydown',
     ];
     const onGesture = () => {
@@ -222,11 +251,12 @@ export function PianoScene({
     // Coming back from a background tab suspends the context again.
     const onVisible = () => {
       const ctx = audioRef.current;
-      if (document.visibilityState === 'visible' && ctx?.state === 'suspended') {
-        void ctx.resume();
+      if (document.visibilityState === 'visible' && ctx && ctx.state !== 'running') {
+        void ctx.resume().then(() => setAudioState(ctx.state));
       }
     };
     document.addEventListener('visibilitychange', onVisible);
+    setDebug(new URLSearchParams(window.location.search).has('audiodebug'));
 
     return () => {
       events.forEach((e) => document.removeEventListener(e, onGesture));
@@ -508,15 +538,42 @@ export function PianoScene({
           >
             Tám điều chưa nói
           </span>
-          <button
-            type="button"
-            onClick={toggleSound}
-            aria-label={muted ? 'Bật tiếng' : 'Tắt tiếng'}
-            aria-pressed={!muted}
-            className="grid h-[34px] w-[34px] place-items-center rounded-full border border-gold/45 text-gold transition-colors duration-300 hover:bg-gold/10"
-          >
-            {muted ? <SpeakerSlashIcon size={15} /> : <SpeakerHighIcon size={15} />}
-          </button>
+
+          <div className="flex items-center gap-3">
+            {debug ? (
+              <span className="rounded-full bg-burgundy/70 px-2.5 py-1 text-[10px] tracking-[0.14em] text-surface uppercase tabular-nums">
+                audio: {audioState}
+              </span>
+            ) : null}
+
+            {/* The button tells the truth: sound wanted but not yet granted is
+                its own state, and tapping it is what grants it. */}
+            {!muted && !live ? (
+              <span className="text-[10px] tracking-[0.18em] text-gold/80 uppercase">
+                Chạm để bật tiếng
+              </span>
+            ) : null}
+
+            <button
+              type="button"
+              onClick={toggleSound}
+              aria-label={
+                muted ? 'Bật tiếng' : live ? 'Tắt tiếng' : 'Chạm để bật tiếng'
+              }
+              aria-pressed={!muted && live}
+              className={`grid h-[34px] w-[34px] place-items-center rounded-full border text-gold transition-colors duration-300 hover:bg-gold/10 ${
+                !muted && !live
+                  ? 'animate-pulse border-gold'
+                  : 'border-gold/45'
+              }`}
+            >
+              {muted || !live ? (
+                <SpeakerSlashIcon size={15} />
+              ) : (
+                <SpeakerHighIcon size={15} />
+              )}
+            </button>
+          </div>
         </div>
 
         <div
