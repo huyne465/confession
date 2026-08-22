@@ -3,7 +3,8 @@
 import { CaretLeftIcon, CaretRightIcon } from '@phosphor-icons/react/dist/ssr';
 import { useReducedMotion } from 'motion/react';
 import Image from 'next/image';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { assetUrl } from '@/lib/api';
 import type { Photo } from '@/lib/types';
 import { useReveal } from './Reveal';
 
@@ -14,6 +15,9 @@ const TILTS = [-1.5, 2.4, -2.9, 1.6, 3.2];
 
 /** How far a drag has to travel before it counts as a flick. */
 const THROW = 56;
+
+/** A stack is a handful you leaf through. The rest of the album is the sphere. */
+const STACK_SIZE = 6;
 
 type CardState = {
   x: number;
@@ -48,7 +52,14 @@ function staticStyle(depth: number, cardIdx: number): React.CSSProperties {
  * and the next springs up to take its place. Drag is the primary gesture; the
  * two buttons are there for a mouse and for the keyboard.
  */
-export function MemoryMosaic({ photos }: { photos: Photo[] }) {
+export function MemoryMosaic({ photos: all }: { photos: Photo[] }) {
+  // Clips belong on the sphere, where they can play. A polaroid is a still.
+  // Memoised: the effects below key on this array, and a fresh one per render
+  // would reset the stack on every state change it causes.
+  const photos = useMemo(
+    () => all.filter((photo) => photo.mediaType !== 'video').slice(0, STACK_SIZE),
+    [all],
+  );
   const revealRef = useReveal<HTMLDivElement>();
   const cardRefs = useRef<Array<HTMLElement | null>>([]);
   const animeRef = useRef<Anime | null>(null);
@@ -239,7 +250,7 @@ export function MemoryMosaic({ photos }: { photos: Photo[] }) {
                 >
                   <div className="relative block aspect-[4/5] w-full">
                     <Image
-                      src={photo.imageUrl}
+                      src={assetUrl(photo.fullUrl ?? photo.imageUrl)}
                       alt={photo.title ?? 'Ảnh kỷ niệm'}
                       fill
                       draggable={false}

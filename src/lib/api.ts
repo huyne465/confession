@@ -28,6 +28,20 @@ async function get<T>(path: string, fallback: T): Promise<T> {
   }
 }
 
+/**
+ * Uploaded media is stored as a root-relative path so the database survives a
+ * change of domain. next/image cannot fetch one of those: a relative src is
+ * resolved against the Next server itself, and /assets belongs to nginx. So the
+ * public origin gets put back on here, at the edge of the app rather than in
+ * the data.
+ */
+export function assetUrl(url: string): string {
+  if (!url) return url;
+  if (/^https?:\/\//i.test(url)) return url;
+  if (!url.startsWith('/')) return url;
+  return `${API_BASE.replace(/\/api$/, '')}${url}`;
+}
+
 export const DEFAULT_CONFIG: SiteConfig = {
   id: 'singleton',
   siteTitle: 'Kỷ Niệm Của Chúng Mình',
@@ -42,6 +56,7 @@ export const DEFAULT_CONFIG: SiteConfig = {
   confessEyebrow: 'Hành trình của chúng mình chỉ mới bắt đầu...',
   confessHeadline: 'Làm người yêu anh nhé?',
   confessImageUrl: '',
+  confessVideoUrl: '',
   confessCaption: 'Forever Yours',
   confessPrimaryCta: 'Đồng ý',
   confessDenyCta: 'Để anh nghĩ thêm',

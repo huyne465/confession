@@ -1,6 +1,7 @@
 'use client';
 
 import Image from 'next/image';
+import { assetUrl } from '@/lib/api';
 import type { Milestone } from '@/lib/types';
 import { useReveal } from './Reveal';
 
@@ -79,7 +80,7 @@ function MilestoneEntry({ milestone }: { milestone: Milestone }) {
           style={{ aspectRatio: milestone.aspect }}
         >
           <Image
-            src={milestone.imageUrl}
+            src={assetUrl(milestone.imageUrl)}
             alt={milestone.title}
             fill
             sizes="(max-width: 560px) 92vw, 520px"

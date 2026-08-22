@@ -22,7 +22,12 @@ export type Message = {
 
 export type Photo = {
   id: string;
+  /** Thumbnail, or a video's poster frame. */
   imageUrl: string;
+  /** Full-resolution source, loaded only once a tile is focused. */
+  fullUrl: string | null;
+  mediaType: 'image' | 'video';
+  videoUrl: string | null;
   title: string | null;
   subtitle: string | null;
   span: 'wide' | 'tall' | 'square';
@@ -41,6 +46,7 @@ export type SiteConfig = {
   confessEyebrow: string;
   confessHeadline: string;
   confessImageUrl: string;
+  confessVideoUrl: string;
   confessCaption: string;
   confessPrimaryCta: string;
   confessDenyCta: string;

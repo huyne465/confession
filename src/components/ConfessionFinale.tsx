@@ -3,7 +3,7 @@
 import { useReducedMotion } from 'motion/react';
 import Image from 'next/image';
 import { useEffect, useRef, useState } from 'react';
-import { sendAnswer } from '@/lib/api';
+import { assetUrl, sendAnswer } from '@/lib/api';
 import type { SiteConfig } from '@/lib/types';
 
 type Props = Pick<
@@ -11,6 +11,7 @@ type Props = Pick<
   | 'confessEyebrow'
   | 'confessHeadline'
   | 'confessImageUrl'
+  | 'confessVideoUrl'
   | 'confessCaption'
   | 'confessPrimaryCta'
   | 'confessDenyCta'
@@ -41,6 +42,7 @@ export function ConfessionFinale({
   confessEyebrow,
   confessHeadline,
   confessImageUrl,
+  confessVideoUrl,
   confessCaption,
   confessPrimaryCta,
   confessDenyCta,
@@ -108,10 +110,25 @@ export function ConfessionFinale({
         </p>
 
         <figure className="mx-auto mt-[26px] mb-[34px] w-[min(240px,62vw)]">
-          <div className="relative aspect-[4/5] w-full border-[6px] border-stage-soft ring-1 ring-gold/30">
-            {confessImageUrl ? (
+          <div className="relative aspect-[4/5] w-full overflow-hidden border-[6px] border-stage-soft ring-1 ring-gold/30">
+            {confessVideoUrl ? (
+              // The last frame of the album is the one that moves. Muted and
+              // inline so it can autoplay on a phone at all; the poster covers
+              // the wait, and the browser refusing to play leaves it standing.
+              <video
+                src={assetUrl(confessVideoUrl)}
+                poster={confessImageUrl ? assetUrl(confessImageUrl) : undefined}
+                autoPlay
+                muted
+                loop
+                playsInline
+                preload="metadata"
+                aria-label="Thước phim cuối cùng của album"
+                className="h-full w-full object-cover contrast-[1.05] saturate-[0.82] sepia-[0.14]"
+              />
+            ) : confessImageUrl ? (
               <Image
-                src={confessImageUrl}
+                src={assetUrl(confessImageUrl)}
                 alt="Bức ảnh cuối cùng của album"
                 fill
                 sizes="(max-width: 420px) 62vw, 240px"
