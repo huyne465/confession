@@ -123,6 +123,10 @@ type Engine = {
   keysMoving: boolean;
   /** The camera has caught up with the scroll and has nothing left to draw. */
   settled: boolean;
+  /** Highest note index actually reached, so a restored scroll cannot cheat. */
+  notesSeen: number;
+  /** The reader started at the top of the scene rather than being dropped in. */
+  travelled: boolean;
   /** Milliseconds between frames, or 0 for as fast as the display allows. */
   minFrame: number;
   lastFrame: number;
@@ -154,6 +158,7 @@ export function PianoScene({
   const samplesRef = useRef<Array<AudioBuffer | null>>([]);
   const musicRef = useRef<HTMLAudioElement | null>(null);
   const musicOnRef = useRef(false);
+  const musicPrimedRef = useRef(false);
   const mutedRef = useRef(startMuted);
 
   const [muted, setMuted] = useState(startMuted);
@@ -210,13 +215,22 @@ export function PianoScene({
     // An <audio> element has its own permission. Touching play() inside this
     // same gesture is what buys the right to start it programmatically later.
     const music = musicRef.current;
-    if (music && !musicOnRef.current) {
+    if (music && !musicOnRef.current && !musicPrimedRef.current) {
+      musicPrimedRef.current = true;
+      // Priming is a permission trick, not playback: the element has to start
+      // once inside a gesture for a later programmatic play to be allowed. It
+      // must be inaudible, or the gate answers itself with a burst of music.
+      music.muted = true;
+      music.volume = 0;
       void music
         .play()
         .then(() => {
-          if (!musicOnRef.current) music.pause();
+          music.pause();
+          music.currentTime = 0;
+          music.muted = false;
         })
         .catch(() => {
+          music.muted = false;
           // Refused. The scroll trigger will try again from its own gesture.
         });
     }
@@ -519,7 +533,13 @@ export function PianoScene({
       );
       if (idx !== engine.active) goToNote(engine, idx);
       if (engine.targetP > 0.005) playOpening(engine);
-      if (engine.targetP > MUSIC_AT) startMusic();
+
+      // "After the eight notes" means having gone through them, not merely
+      // being below them. A refresh restores the scroll position, and the old
+      // check read that as the reader having arrived — so the track started
+      // over a page nobody had scrolled yet.
+      if (engine.travelled) engine.notesSeen = Math.max(engine.notesSeen, idx);
+      if (engine.notesSeen >= count && engine.targetP > MUSIC_AT) startMusic();
     }
 
     /**
@@ -589,6 +609,8 @@ export function PianoScene({
         active: 0,
         visible: true,
         openingDone: false,
+        notesSeen: 0,
+        travelled: false,
         keysMoving: false,
         settled: false,
         minFrame: stage.quality === 'low' ? 1000 / 30 : 0,
@@ -617,7 +639,14 @@ export function PianoScene({
       };
       window.addEventListener('curtain:open', onCurtain);
 
+      // A story behind a gate is meant to be read from the first line. Letting
+      // the browser restore a scroll position drops the reader into the middle
+      // of a scene whose state was never built.
+      if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
+      window.scrollTo(0, 0);
+
       readScroll(engine);
+      engine.travelled = engine.targetP < 0.05;
       engine.shownP = engine.targetP;
       loop(engine, 0);
     })();

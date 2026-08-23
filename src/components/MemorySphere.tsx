@@ -121,8 +121,18 @@ export function MemorySphere({ title, intro, items }: Props) {
     appliedRef.current = items.map(() => ({ blur: -1, opacity: -1, z: -1 }));
 
     const measure = () => {
-      // Tiles orbit well inside the glass, or they clip through it.
-      radiusRef.current = Math.max(96, (globe.clientWidth || 320) * 0.29);
+      const ballR = (globe.clientWidth || 320) / 2;
+      // Orbit radius first: leave room for a tile and its focus scale between
+      // the orbit and the glass, or the front tile pushes through the surface.
+      const R = ballR * 0.6;
+      // Then the tile, from how much room each one actually gets. N points on a
+      // sphere sit about sqrt(4π/N) radians apart, so the arc between
+      // neighbours is R·sqrt(4π/N) — a tile wider than that overlaps the one
+      // beside it, which is what was tearing the images into each other.
+      const spacing = R * Math.sqrt((4 * Math.PI) / Math.max(1, items.length));
+      const tile = Math.max(38, Math.min(96, spacing / 1.5));
+      radiusRef.current = R;
+      globe.style.setProperty('--tile', `${Math.round(tile)}px`);
     };
     measure();
     const ro = new ResizeObserver(measure);
@@ -150,7 +160,7 @@ export function MemorySphere({ title, intro, items }: Props) {
         const isFocus = i === best;
 
         // transform is composited, so it can be written every frame for free.
-        const scale = isFocus ? 1.28 : 0.72 + near * 0.2;
+        const scale = isFocus ? 1.16 : 0.7 + near * 0.2;
         el.style.transform =
           `rotateY(${spots[i].yaw}deg) rotateX(${spots[i].pitch}deg) ` +
           `translateZ(${R}px) scale(${scale.toFixed(3)})`;
@@ -519,7 +529,7 @@ export function MemorySphere({ title, intro, items }: Props) {
 
         .globe-ball {
           border-radius: 9999px;
-          perspective: 900px;
+          perspective: 1400px;
           perspective-origin: 50% 45%;
           /* The glass body itself: dark, cold, faintly lit from within. */
           background:
@@ -552,10 +562,10 @@ export function MemorySphere({ title, intro, items }: Props) {
 
         .globe-tile {
           position: absolute;
-          width: 74px;
-          height: 74px;
-          margin-left: -37px;
-          margin-top: -37px;
+          width: var(--tile, 70px);
+          height: var(--tile, 70px);
+          margin-left: calc(var(--tile, 70px) / -2);
+          margin-top: calc(var(--tile, 70px) / -2);
           overflow: hidden;
           border-radius: 2px;
           background: #1a1614;
@@ -566,15 +576,6 @@ export function MemorySphere({ title, intro, items }: Props) {
           /* No will-change: promoting twenty-five tiles to their own layers
              costs more texture memory than the repaint it saves. */
           cursor: pointer;
-        }
-
-        @media (min-width: 640px) {
-          .globe-tile {
-            width: 88px;
-            height: 88px;
-            margin-left: -44px;
-            margin-top: -44px;
-          }
         }
 
         .globe-play {

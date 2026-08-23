@@ -93,6 +93,27 @@ function MilestoneEntry({ milestone }: { milestone: Milestone }) {
           </figcaption>
         ) : null}
       </figure>
+
+      {/* The rest of the set, printed small. The count is the argument here —
+          one photo would say the thing happened, a wall of them says how often. */}
+      {milestone.images.length > 0 ? (
+        <ul className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+          {milestone.images.map((url, index) => (
+            <li
+              key={`${url}-${index}`}
+              className="relative aspect-square border-[3px] border-surface-high ring-1 ring-ink/10"
+            >
+              <Image
+                src={assetUrl(url)}
+                alt={`${milestone.title} — ${index + 1}`}
+                fill
+                sizes="(max-width: 560px) 44vw, 170px"
+                className="object-cover contrast-[1.05] saturate-[0.82] sepia-[0.22]"
+              />
+            </li>
+          ))}
+        </ul>
+      ) : null}
     </article>
   );
 }

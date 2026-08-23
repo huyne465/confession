@@ -4,6 +4,8 @@ export type Milestone = {
   title: string;
   body: string;
   imageUrl: string;
+  /** Extra photos shown as a grid under the lead image. */
+  images: string[];
   caption: string | null;
   aspect: string;
   tilt: number;

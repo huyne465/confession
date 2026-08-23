@@ -14,7 +14,14 @@ import {
   type Resource,
 } from '@/lib/admin';
 import type { Message, Milestone, Photo, SiteConfig } from '@/lib/types';
-import { Button, ImageField, SelectField, TextArea, TextField } from './fields';
+import {
+  Button,
+  GalleryField,
+  ImageField,
+  SelectField,
+  TextArea,
+  TextField,
+} from './fields';
 
 type Tab = Resource | 'config';
 
@@ -364,6 +371,7 @@ function MilestoneCard({
     title: item.title,
     body: item.body,
     imageUrl: item.imageUrl,
+    images: item.images ?? [],
     caption: item.caption ?? '',
     aspect: item.aspect,
     tilt: item.tilt,
@@ -402,9 +410,16 @@ function MilestoneCard({
       </div>
       <div className="mt-4">
         <ImageField
-          label="Ảnh"
+          label="Ảnh chính"
           value={draft.imageUrl}
           onChange={(imageUrl) => set({ imageUrl })}
+        />
+      </div>
+      <div className="mt-4">
+        <GalleryField
+          label="Thư viện ảnh"
+          value={draft.images}
+          onChange={(images) => set({ images })}
         />
       </div>
       <div className="mt-4 grid gap-4 sm:grid-cols-3">

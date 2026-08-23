@@ -11,8 +11,8 @@ const ebGaramond = EB_Garamond({
 });
 
 export const metadata: Metadata = {
-  title: 'Kỷ Niệm Của Chúng Mình',
-  description: 'Một cuốn album nhỏ, viết riêng cho một người.',
+  title: 'An',
+  description: 'Yêu An nhất trên thế giới',
 };
 
 export const viewport: Viewport = {

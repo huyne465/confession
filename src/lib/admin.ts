@@ -55,7 +55,11 @@ export const saveConfig = (body: Partial<SiteConfig> & { gatePin?: string }) =>
     body: JSON.stringify(body),
   });
 
-/** Uploads a file and returns an absolute URL usable in next/image. */
+/**
+ * Uploads a file and returns the path the API gave it, root-relative. Storing
+ * it that way is what lets the site change domain without every record in the
+ * database pointing at the old one; assetUrl puts the origin back at render.
+ */
 export async function uploadImage(file: File): Promise<string> {
   const form = new FormData();
   form.append('file', file);
@@ -63,5 +67,10 @@ export async function uploadImage(file: File): Promise<string> {
     method: 'POST',
     body: form,
   });
-  return new URL(result.url, API_BASE.replace(/\/api$/, '')).toString();
+  return result.url;
+}
+
+/** Uploads several files at once, keeping the order they were picked in. */
+export async function uploadImages(files: File[]): Promise<string[]> {
+  return Promise.all(files.map((file) => uploadImage(file)));
 }
