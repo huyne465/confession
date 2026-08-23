@@ -28,6 +28,28 @@ const slips = Array.from({ length: SLIPS }, (_, i) => ({
   color: SLIP_COLORS[i % SLIP_COLORS.length],
 }));
 
+/**
+ * The letter, exactly as written. JSX folds a newline into a space, so prose
+ * pasted into a single <p> arrives as one run-on paragraph with every break
+ * the writer meant silently removed. Held as lines instead: the outer array
+ * is paragraphs, the inner one the lines inside each.
+ */
+const LETTER: string[][] = [
+  [
+    "Gửi em,",
+    "Anh biết là mình chưa là gì của nhau nhưng trong lòng anh rất muốn làm người che chở cho em, em là một điều rất đặc biệt, một ánh sáng cứu rỗi cả cuộc đời của anh.",
+  ],
+  [
+    "Anh rất tôn trong quyết định không vội vàng, không hứa hẹn điều gì của em. Vì anh hiểu, tình cảm thật sự cần nhiều thời gian để lớn lên, chứ không phải qua những câu nói gió thoáng qua.",
+    "Vì em là một người rất khó tin và anh rất thích tính cách này của em, dù ngày đó đến nhanh hay chạm thì anh vẫn muốn đợi. Vì khi em không để ý thì anh đã nhìn trộm em rất lâu và khiến anh muốn bước đi cùng em rất lâu trong đời.",
+  ],
+  [
+    "Đừng vì vài lần thất vọng trong tình yêu mà khép lòng với những điều tốt đẹp, lấp lánh của anh luôn tỏa sáng và anh luôn muốn được nhìn thấy diều đó.",
+    "Những vết thương cũ hãy để anh xóa dịu. Cho phép anh được xuất hiện trong cuộc đời của em nhé, Yêu em",
+  ],
+];
+
+const SIGN_OFF = "Anh ước em là người cuối cùng anh gặp để yêu nhau";
 function todayLabel(): string {
   const d = new Date();
   return `Hôm nay, ngày ${d.getDate()} tháng ${d.getMonth() + 1}, ${d.getFullYear()}`;
@@ -106,7 +128,7 @@ export function ConfessionFinale({
     >
       <div className="relative mx-auto max-w-[35rem] text-center">
         <p className="text-[11px] tracking-[0.24em] text-gold uppercase tabular-nums">
-          IV — Kết thúc
+          IV — Lời Nói Cuối
         </p>
 
         <figure className="mx-auto mt-[26px] mb-[34px] w-[min(240px,62vw)]">
@@ -163,13 +185,26 @@ export function ConfessionFinale({
               <p className="mb-3.5 text-[27px] leading-[1.12] tracking-[-0.02em] text-burgundy">
                 Vậy là từ hôm nay, album này có thêm một trang mới.
               </p>
-              <p className="text-[15px] leading-[1.8] text-ink-soft">
-                Anh sẽ giữ nó cẩn thận, như giữ tất cả những buổi Em ngồi xuống
-                và đàn cho anh nghe. Cảm ơn Em.
-              </p>
-              <div className="mt-6 flex items-center gap-3 border-t border-burgundy/15 pt-3.5">
-                <span className="h-px flex-1 bg-gold/50" />
-                <span className="text-[16px] text-burgundy italic">Của Em</span>
+              {LETTER.map((paragraph, i) => (
+                <p
+                  key={i}
+                  className={`text-[15px] leading-[1.8] text-ink-soft ${
+                    i > 0 ? 'mt-4' : ''
+                  }`}
+                >
+                  {paragraph.map((line, j) => (
+                    <span key={j}>
+                      {j > 0 ? <br /> : null}
+                      {line}
+                    </span>
+                  ))}
+                </p>
+              ))}
+              <div className="mt-6 border-t border-burgundy/15 pt-3.5">
+                <span className="block h-px w-10 bg-gold/50" />
+                <p className="mt-3 text-[16px] leading-[1.45] text-balance text-burgundy italic">
+                  {SIGN_OFF}
+                </p>
               </div>
             </div>
           </div>
@@ -191,9 +226,8 @@ export function ConfessionFinale({
             </button>
             <p
               aria-live="polite"
-              className={`mt-2 text-[15px] text-surface/55 italic transition-opacity duration-500 ${
-                nudged ? 'opacity-100' : 'opacity-0'
-              }`}
+              className={`mt-2 text-[15px] text-surface/55 italic transition-opacity duration-500 ${nudged ? 'opacity-100' : 'opacity-0'
+                }`}
             >
               {nudged ? 'Không sao. Anh đợi được.' : 'x'}
             </p>

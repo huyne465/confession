@@ -21,7 +21,7 @@ export function JourneyTimeline({ title, intro, milestones }: Props) {
     <section id="hanh-trinh" className="scroll-mt-16">
       <div className="mx-auto max-w-[35rem] px-6 pt-[84px] pb-6">
         <p className="text-[11px] tracking-[0.24em] text-gold-deep uppercase tabular-nums">
-          I — Hành trình
+          I — Hành trình yêu em
         </p>
         <h2 className="mt-5 text-[clamp(34px,9.5vw,52px)] leading-[1.02] tracking-[-0.03em] text-balance text-burgundy">
           {title}

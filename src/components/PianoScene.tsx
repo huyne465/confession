@@ -29,48 +29,48 @@ type Props = {
 };
 
 const DEFAULT_OPENING =
-  'Anh rất thích nghe những bản piano mà em đánh cho anh nghe';
+  'Anh rất thích nghe những bản piano mà em tự đánh tự thu và anh may mắn được nghe nó.';
 
 const DEFAULT_NOTES: PianoNote[] = [
   {
     eyebrow: 'Điều thứ nhất',
-    title: 'Lần đầu Em đàn',
-    body: 'Anh chỉ nói là hay. Anh không nói rằng tay anh lạnh đi vì hồi hộp, và đoạn nhạc đó chạy trong đầu anh suốt cả tuần sau.',
+    title: 'Xin chào forever crush của anh',
+    body: 'Trộm vía mỗi lần nhìn thấy An thi vẫn không thay lòng với cô bạn hồi nhỏ của mình',
   },
   {
     eyebrow: 'Điều thứ hai',
-    title: 'Cái nốt Em đánh sai',
-    body: 'Mỗi lần Em bấm sai một nốt rồi bật cười, anh lại thấy bản nhạc đó thành của riêng hai đứa.',
+    title: 'Có thể là tôi sai',
+    body: 'Nhưng lỡ sai rồi Huy muốn trở thành một người mà An có thể tự hào là xứng đáng để yêu',
   },
   {
     eyebrow: 'Điều thứ ba',
-    title: 'Ba mươi lần một câu',
-    body: 'Em tập một câu nhạc ba mươi lần. Anh ngồi đó, không mở điện thoại lần nào, chỉ chờ nghe lần thứ ba mươi mốt.',
+    title: 'Tôi yêu em nhiều tới mức',
+    body: 'Dù cho có những tính xấu hay thiếu sót gì thì Huy yêu cả những cái đó luôn vì đâu ai hoàn hảo đâu. Không phải vì ngoại hình mà là vì tính cách của An',
   },
   {
     eyebrow: 'Điều thứ tư',
-    title: '“Mai đàn tiếp nhé”',
-    body: 'Em nói câu đó như chuyện thường ngày. Với anh, chính những buổi “mai đàn tiếp” ấy giữ anh đi qua cả tuần dài.',
+    title: 'An là một người mạnh mẽ',
+    body: 'Dẫu biết là thế nhưng Huy vẫn muốn được che chở cho An mỗi khi An cần',
   },
   {
     eyebrow: 'Điều thứ năm',
-    title: 'Bàn tay Em trên phím',
-    body: 'Anh nhớ tay Em nhiều hơn nhớ bài nhạc. Nhớ cả cái cách Em dừng lại, xoa hai bàn tay vào nhau khi trời lạnh.',
+    title: 'Ý Chí',
+    body: 'Đã có một khoảng thời gian Huy bị mất định hướng và An là người mà Huy nghĩ đến để cố gắng trong cuộc sống này và Huy rất biết ơn vì An xuất hiện trong đời Huy để cho Huy biết ý nghĩa của cuộc sống này',
   },
   {
     eyebrow: 'Điều thứ sáu',
-    title: 'Bài Em đàn cho anh',
-    body: 'Có một tối Em bảo bài này đàn cho anh. Anh không nói thêm được gì, chỉ ngồi im để nghe cho hết.',
+    title: 'Những Ai tệ với An',
+    body: 'Có thể là vì vài mối tính trước mà An khép lòng không muốn chia sẻ thêm gì cho Huy biết nhưng Huy vẫn luôn muốn hiểu thêm về An để tụi mình hòa hợp với nhau hơn',
   },
   {
     eyebrow: 'Điều thứ bảy',
-    title: 'Những lần anh im lặng',
-    body: 'Anh im không phải vì không có gì để nói. Là vì anh chưa tìm ra cách nói cho vừa đủ.',
+    title: 'Xin lỗi vì những lần trẻ con',
+    body: 'Huy mặc dù chưa lớn và trưởng thành trong suy nghĩ nhưng vì An Huy sẽ cố gắng để thay đổi. Cảm ơn vì An đã cho Huy cơ hội để đi đến tới đây',
   },
   {
     eyebrow: 'Điều thứ tám',
     title: 'Điều anh giữ tới cuối',
-    body: 'Anh muốn còn được nghe Em đàn thêm nhiều năm nữa. Câu đó, hôm nay anh nói ở đây, trước khi trang cuối mở ra.',
+    body: 'Anh muốn còn được nghe Em đàn, Em chửi anh, giận anh, Đá dái và thậm chí là xua đủa anh thêm nhiều năm nữa. Tiếp tục vuốt xuống nhé',
   },
 ];
 
@@ -330,7 +330,7 @@ export function PianoScene({
     const music = musicRef.current;
     if (!music) return;
     if (muted) music.pause();
-    else if (musicOnRef.current) void music.play().catch(() => {});
+    else if (musicOnRef.current) void music.play().catch(() => { });
   }, [muted]);
 
   /** Bring the track up over a couple of seconds rather than dropping it in. */
@@ -681,155 +681,154 @@ export function PianoScene({
 
   return (
     <>
-    {musicUrl ? (
-      // preload="none" keeps 700KB off the first paint; nothing needs it until
-      // the reader is eight notes deep.
-      <audio ref={musicRef} src={assetUrl(musicUrl)} loop preload="none" />
-    ) : null}
+      {musicUrl ? (
+        // preload="none" keeps 700KB off the first paint; nothing needs it until
+        // the reader is eight notes deep.
+        <audio ref={musicRef} src={assetUrl(musicUrl)} loop preload="none" />
+      ) : null}
 
-    {/* Once music is playing it outlives this section, so the way to silence
+      {/* Once music is playing it outlives this section, so the way to silence
         it has to outlive the section too. */}
-    {musicPlaying ? (
-      <button
-        type="button"
-        onClick={toggleSound}
-        aria-label={muted ? 'Bật tiếng' : 'Tắt tiếng'}
-        className="fixed right-4 bottom-4 z-40 grid h-11 w-11 place-items-center rounded-full border border-gold/45 bg-stage/80 text-gold shadow-[0_10px_30px_-12px_rgb(0_0_0/0.8)] backdrop-blur-sm transition-colors duration-300 hover:bg-gold/15"
+      {musicPlaying ? (
+        <button
+          type="button"
+          onClick={toggleSound}
+          aria-label={muted ? 'Bật tiếng' : 'Tắt tiếng'}
+          className="fixed right-4 bottom-4 z-40 grid h-11 w-11 place-items-center rounded-full border border-gold/45 bg-stage/80 text-gold shadow-[0_10px_30px_-12px_rgb(0_0_0/0.8)] backdrop-blur-sm transition-colors duration-300 hover:bg-gold/15"
+        >
+          {muted ? <SpeakerSlashIcon size={17} /> : <SpeakerHighIcon size={17} />}
+        </button>
+      ) : null}
+
+      <section
+        id="san-khau"
+        ref={sectionRef}
+        className="relative h-[940vh] bg-stage"
+        style={sceneLength === 1 ? undefined : { height: `${Math.round(940 * sceneLength)}vh` }}
       >
-        {muted ? <SpeakerSlashIcon size={17} /> : <SpeakerHighIcon size={17} />}
-      </button>
-    ) : null}
+        <div className="sticky top-0 h-screen overflow-hidden bg-stage">
+          <canvas
+            ref={canvasRef}
+            className="absolute inset-0 block h-full w-full"
+          />
 
-    <section
-      id="san-khau"
-      ref={sectionRef}
-      className="relative h-[940vh] bg-stage"
-      style={sceneLength === 1 ? undefined : { height: `${Math.round(940 * sceneLength)}vh` }}
-    >
-      <div className="sticky top-0 h-screen overflow-hidden bg-stage">
-        <canvas
-          ref={canvasRef}
-          className="absolute inset-0 block h-full w-full"
-        />
+          {/* Vignette: dark at the top for the counter, dark at the foot for the text. */}
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-0 bg-[linear-gradient(to_bottom,rgba(11,10,9,0.62)_0%,rgba(11,10,9,0.05)_22%,rgba(11,10,9,0)_34%,rgba(11,10,9,0.82)_60%,#0b0a09_78%)]"
+          />
 
-        {/* Vignette: dark at the top for the counter, dark at the foot for the text. */}
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-0 bg-[linear-gradient(to_bottom,rgba(11,10,9,0.62)_0%,rgba(11,10,9,0.05)_22%,rgba(11,10,9,0)_34%,rgba(11,10,9,0.82)_60%,#0b0a09_78%)]"
-        />
+          {/* Wipes to paper as the lid shuts, handing over to the album below. */}
+          <div
+            ref={paperRef}
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-0 bg-surface opacity-0"
+          />
 
-        {/* Wipes to paper as the lid shuts, handing over to the album below. */}
-        <div
-          ref={paperRef}
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-0 bg-surface opacity-0"
-        />
+          <div className="absolute inset-x-[22px] top-[22px] flex items-center justify-between gap-4">
+            <span
+              ref={counterRef}
+              className="text-[11px] tracking-[0.24em] text-surface/40 uppercase tabular-nums"
+            >
+              Tám điều chưa nói
+            </span>
 
-        <div className="absolute inset-x-[22px] top-[22px] flex items-center justify-between gap-4">
-          <span
-            ref={counterRef}
-            className="text-[11px] tracking-[0.24em] text-surface/40 uppercase tabular-nums"
-          >
-            Tám điều chưa nói
-          </span>
+            <div className="flex items-center gap-3">
+              {debug ? (
+                <span className="rounded-full bg-burgundy/70 px-2.5 py-1 text-[10px] tracking-[0.14em] text-surface uppercase tabular-nums">
+                  audio: {audioState}
+                </span>
+              ) : null}
 
-          <div className="flex items-center gap-3">
-            {debug ? (
-              <span className="rounded-full bg-burgundy/70 px-2.5 py-1 text-[10px] tracking-[0.14em] text-surface uppercase tabular-nums">
-                audio: {audioState}
-              </span>
-            ) : null}
-
-            {/* The button tells the truth: sound wanted but not yet granted is
+              {/* The button tells the truth: sound wanted but not yet granted is
                 its own state, and tapping it is what grants it. */}
-            {!muted && !live ? (
-              <span className="text-[10px] tracking-[0.18em] text-gold/80 uppercase">
-                Chạm để bật tiếng
-              </span>
-            ) : null}
+              {!muted && !live ? (
+                <span className="text-[10px] tracking-[0.18em] text-gold/80 uppercase">
+                  Chạm để bật tiếng
+                </span>
+              ) : null}
 
-            <button
-              type="button"
-              onClick={toggleSound}
-              aria-label={
-                muted ? 'Bật tiếng' : live ? 'Tắt tiếng' : 'Chạm để bật tiếng'
-              }
-              aria-pressed={!muted && live}
-              className={`grid h-[34px] w-[34px] place-items-center rounded-full border text-gold transition-colors duration-300 hover:bg-gold/10 ${
-                !muted && !live
+              <button
+                type="button"
+                onClick={toggleSound}
+                aria-label={
+                  muted ? 'Bật tiếng' : live ? 'Tắt tiếng' : 'Chạm để bật tiếng'
+                }
+                aria-pressed={!muted && live}
+                className={`grid h-[34px] w-[34px] place-items-center rounded-full border text-gold transition-colors duration-300 hover:bg-gold/10 ${!muted && !live
                   ? 'animate-pulse border-gold'
                   : 'border-gold/45'
-              }`}
-            >
-              {muted || !live ? (
-                <SpeakerSlashIcon size={15} />
-              ) : (
-                <SpeakerHighIcon size={15} />
-              )}
-            </button>
-          </div>
-        </div>
-
-        <div
-          ref={(el) => {
-            noteRefs.current[0] = el;
-          }}
-          className="absolute inset-x-0 bottom-0 px-6 pb-11"
-        >
-          <p className="text-[clamp(30px,8.6vw,46px)] leading-[1.16] tracking-[-0.02em] text-pretty text-surface">
-            {words.map((word, i) => (
-              <span
-                key={`${word}-${i}`}
-                ref={(el) => {
-                  wordRefs.current[i] = el;
-                }}
-                className="mr-[0.26em] inline-block opacity-0"
+                  }`}
               >
-                {word}
-              </span>
-            ))}
-          </p>
-          <div className="mt-8 flex items-center gap-3">
-            <span className="block h-px w-[38px] bg-gold/80" />
-            <span className="text-[11px] tracking-[0.24em] text-surface/50 uppercase">
-              Cuộn xuống, {count === 8 ? 'tám' : count} điều
-            </span>
+                {muted || !live ? (
+                  <SpeakerSlashIcon size={15} />
+                ) : (
+                  <SpeakerHighIcon size={15} />
+                )}
+              </button>
+            </div>
           </div>
-        </div>
 
-        {notes.map((note, i) => (
           <div
-            key={note.title}
             ref={(el) => {
-              noteRefs.current[i + 1] = el;
+              noteRefs.current[0] = el;
             }}
-            className="absolute inset-x-0 bottom-0 px-6 pb-11 opacity-0"
+            className="absolute inset-x-0 bottom-0 px-6 pb-11"
           >
-            <p className="mb-3.5 text-[11px] tracking-[0.24em] text-gold uppercase">
-              {note.eyebrow}
+            <p className="text-[clamp(30px,8.6vw,46px)] leading-[1.16] tracking-[-0.02em] text-pretty text-surface">
+              {words.map((word, i) => (
+                <span
+                  key={`${word}-${i}`}
+                  ref={(el) => {
+                    wordRefs.current[i] = el;
+                  }}
+                  className="mr-[0.26em] inline-block opacity-0"
+                >
+                  {word}
+                </span>
+              ))}
             </p>
-            <h2 className="mb-[18px] text-[clamp(32px,9vw,46px)] leading-[1.04] tracking-[-0.025em] text-surface">
-              {note.title}
-            </h2>
-            <p className="max-w-[34ch] text-[15px] leading-[1.8] text-pretty text-surface/70">
-              {note.body}
-            </p>
+            <div className="mt-8 flex items-center gap-3">
+              <span className="block h-px w-[38px] bg-gold/80" />
+              <span className="text-[11px] tracking-[0.24em] text-surface/50 uppercase">
+                Cuộn xuống, {count === 8 ? 'tám' : count} điều
+              </span>
+            </div>
           </div>
-        ))}
 
-        <div className="absolute inset-x-6 bottom-[22px] flex gap-[5px]">
           {notes.map((note, i) => (
-            <span
+            <div
               key={note.title}
               ref={(el) => {
-                tickRefs.current[i] = el;
+                noteRefs.current[i + 1] = el;
               }}
-              className="h-0.5 flex-1 bg-surface/15"
-            />
+              className="absolute inset-x-0 bottom-0 px-6 pb-11 opacity-0"
+            >
+              <p className="mb-3.5 text-[11px] tracking-[0.24em] text-gold uppercase">
+                {note.eyebrow}
+              </p>
+              <h2 className="mb-[18px] text-[clamp(32px,9vw,46px)] leading-[1.04] tracking-[-0.025em] text-surface">
+                {note.title}
+              </h2>
+              <p className="max-w-[34ch] text-[15px] leading-[1.8] text-pretty text-surface/70">
+                {note.body}
+              </p>
+            </div>
           ))}
+
+          <div className="absolute inset-x-6 bottom-[22px] flex gap-[5px]">
+            {notes.map((note, i) => (
+              <span
+                key={note.title}
+                ref={(el) => {
+                  tickRefs.current[i] = el;
+                }}
+                className="h-0.5 flex-1 bg-surface/15"
+              />
+            ))}
+          </div>
         </div>
-      </div>
-    </section>
+      </section>
     </>
   );
 }
