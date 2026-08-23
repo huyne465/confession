@@ -3,7 +3,7 @@
 import { CaretLeftIcon, CaretRightIcon } from '@phosphor-icons/react/dist/ssr';
 import { useReducedMotion } from 'motion/react';
 import Image from 'next/image';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { assetUrl } from '@/lib/api';
 import type { Photo } from '@/lib/types';
 import { useReveal } from './Reveal';
@@ -15,9 +15,6 @@ const TILTS = [-1.5, 2.4, -2.9, 1.6, 3.2];
 
 /** How far a drag has to travel before it counts as a flick. */
 const THROW = 56;
-
-/** A stack is a handful you leaf through. The rest of the album is the sphere. */
-const STACK_SIZE = 6;
 
 type CardState = {
   x: number;
@@ -53,15 +50,9 @@ function staticStyle(depth: number, cardIdx: number): React.CSSProperties {
  * next springs up. Drag is the primary gesture; the two buttons are there for a
  * mouse and for the keyboard.
  */
-export function MemoryMosaic({ photos: all }: { photos: Photo[] }) {
-  // Clips belong on the sphere, where they can play. A polaroid is a still.
-  // Memoised: the effects below key on this array, and a fresh one per render
-  // would reset the stack on every state change it causes.
-  const photos = useMemo(
-    () => all.filter((photo) => photo.mediaType !== 'video').slice(0, STACK_SIZE),
-    [all],
-  );
+export function MemoryMosaic({ photos }: { photos: Photo[] }) {
   const revealRef = useReveal<HTMLDivElement>();
+  const videoRefs = useRef<Array<HTMLVideoElement | null>>([]);
   const cardRefs = useRef<Array<HTMLElement | null>>([]);
   const animeRef = useRef<Anime | null>(null);
   const timeoutRef = useRef(0);
@@ -166,6 +157,24 @@ export function MemoryMosaic({ photos: all }: { photos: Photo[] }) {
     }, reduce ? 0 : 660);
   }
 
+  // order[0] and pos rotate together in both directions, so the card on top is
+  // simply the one at pos. Only that one plays; the rest hold their poster.
+  useEffect(() => {
+    videoRefs.current.forEach((video, i) => {
+      if (!video) return;
+      if (i === pos) {
+        if (!video.src && photos[i]?.videoUrl) {
+          video.src = assetUrl(photos[i].videoUrl);
+        }
+        void video.play().catch(() => {
+          // Autoplay refused. The poster frame is a fine polaroid on its own.
+        });
+      } else if (!video.paused) {
+        video.pause();
+      }
+    });
+  }, [pos, photos]);
+
   function onPointerDown(event: React.PointerEvent<HTMLDivElement>) {
     if (stateRef.current.busy || total < 2) return;
     drag.current = {
@@ -218,7 +227,7 @@ export function MemoryMosaic({ photos: all }: { photos: Photo[] }) {
         ) : (
           <>
             <p className="mt-3.5 mb-[26px] text-[11px] tracking-[0.2em] text-surface/45 uppercase">
-              Vuốt ngang để lật — {total} tấm
+              Vuốt ngang để lật — {total} tấm, cùng bộ với quả cầu
             </p>
 
             <div
@@ -239,7 +248,7 @@ export function MemoryMosaic({ photos: all }: { photos: Photo[] }) {
                   style={staticStyle(index, index)}
                   className="absolute inset-x-0 top-0 mx-auto w-[min(292px,76vw)] cursor-grab border border-burgundy/15 bg-surface-lowest px-[13px] pt-[13px] pb-[46px] shadow-[0_18px_40px_-22px_rgb(74_4_4/0.35)] will-change-transform active:cursor-grabbing"
                 >
-                  <div className="relative block aspect-[4/5] w-full">
+                  <div className="relative block aspect-[4/5] w-full overflow-hidden">
                     <Image
                       src={assetUrl(photo.fullUrl ?? photo.imageUrl)}
                       alt={photo.title ?? 'Ảnh kỷ niệm'}
@@ -248,6 +257,20 @@ export function MemoryMosaic({ photos: all }: { photos: Photo[] }) {
                       sizes="(max-width: 400px) 76vw, 292px"
                       className="pointer-events-none object-cover contrast-[1.05] saturate-[0.82] sepia-[0.22]"
                     />
+                    {photo.mediaType === 'video' ? (
+                      <video
+                        ref={(el) => {
+                          videoRefs.current[index] = el;
+                        }}
+                        muted
+                        loop
+                        playsInline
+                        preload="none"
+                        className={`pointer-events-none absolute inset-0 h-full w-full object-cover contrast-[1.05] saturate-[0.82] sepia-[0.14] transition-opacity duration-500 ${
+                          pos === index ? 'opacity-100' : 'opacity-0'
+                        }`}
+                      />
+                    ) : null}
                   </div>
                   {photo.title ? (
                     <figcaption className="absolute inset-x-[13px] bottom-[15px] text-[15px] leading-[1.3] text-burgundy italic">

@@ -167,7 +167,7 @@ export function CurtainGate({ question, hint, children }: Props) {
                       disabled={!complete || status === 'checking'}
                       className="mt-4 w-full rounded-frame bg-burgundy px-8 py-4 text-sm font-semibold tracking-[0.18em] text-gold-pale uppercase transition-all duration-300 hover:bg-burgundy-deep active:translate-y-px disabled:cursor-not-allowed disabled:opacity-45"
                     >
-                      {status === 'checking' ? 'Đang mở...' : 'Mở cửa trái tim'}
+                      {status === 'checking' ? 'Đang mở...' : 'Mời bảo bối vào trong'}
                     </button>
                   </div>
                 </motion.div>
