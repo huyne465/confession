@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 
 const LINKS = [
   { href: '#hanh-trinh', label: 'Hành trình' },
-  { href: '#khoanh-khac', label: 'Khoảnh khắc' },
+  { href: '#khoanh-khac', label: 'Câu hỏi' },
   { href: '#loi-nhan', label: 'Ký ức' },
   { href: '#ket-thuc', label: 'Kết thúc' },
 ];

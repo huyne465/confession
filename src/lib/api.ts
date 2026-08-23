@@ -80,10 +80,14 @@ export async function verifyPin(pin: string): Promise<boolean> {
   return data.ok;
 }
 
-export async function sendAnswer(accepted: boolean, note?: string) {
+export async function sendAnswer(
+  accepted: boolean,
+  note?: string,
+  extra?: { kind?: 'confession' | 'meter'; level?: number },
+) {
   await fetch(`${API_BASE}/answers`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ accepted, note }),
+    body: JSON.stringify({ accepted, note, ...extra }),
   });
 }

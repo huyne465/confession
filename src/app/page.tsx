@@ -1,7 +1,7 @@
 import { ConfessionFinale } from '@/components/ConfessionFinale';
 import { CurtainGate } from '@/components/CurtainGate';
 import { JourneyTimeline } from '@/components/JourneyTimeline';
-import { MemoryMosaic } from '@/components/MemoryMosaic';
+import { LoveMeter } from '@/components/LoveMeter';
 import { MemorySphere } from '@/components/MemorySphere';
 import { PianoScene } from '@/components/PianoScene';
 import { SiteFooter } from '@/components/SiteFooter';
@@ -28,7 +28,7 @@ export default async function Home() {
           intro={config.journeyIntro}
           milestones={milestones}
         />
-        <MemoryMosaic photos={photos} />
+        <LoveMeter />
         <MemorySphere
           title={config.messagesTitle}
           intro={config.messagesIntro}

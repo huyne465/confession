@@ -48,9 +48,10 @@ function staticStyle(depth: number, cardIdx: number): React.CSSProperties {
 }
 
 /**
- * Chapter II. A Locket-style pile of polaroids: the front card is thrown aside
- * and the next springs up to take its place. Drag is the primary gesture; the
- * two buttons are there for a mouse and for the keyboard.
+ * A Locket-style pile of polaroids, sitting under the globe: the same album,
+ * held in the hand instead of orbiting. The front card is thrown aside and the
+ * next springs up. Drag is the primary gesture; the two buttons are there for a
+ * mouse and for the keyboard.
  */
 export function MemoryMosaic({ photos: all }: { photos: Photo[] }) {
   // Clips belong on the sphere, where they can play. A polaroid is a still.
@@ -201,32 +202,22 @@ export function MemoryMosaic({ photos: all }: { photos: Photo[] }) {
   }
 
   return (
-    <section
-      id="khoanh-khac"
-      className="scroll-mt-16 border-t border-burgundy/12 bg-surface-low pt-[84px] pb-24"
-    >
-      <div className="mx-auto max-w-[35rem] px-6">
-        <p className="text-[11px] tracking-[0.24em] text-gold-deep uppercase tabular-nums">
-          II — Khoảnh khắc
+    <div className="relative mx-auto max-w-[35rem] px-6">
+        <div className="mb-[18px] h-px bg-gold/20" />
+        <p className="text-[11px] tracking-[0.24em] text-gold uppercase tabular-nums">
+          Và vài tấm cầm được trên tay
         </p>
-        <h2 className="mt-5 text-[clamp(34px,9.5vw,52px)] leading-[1.02] tracking-[-0.03em] text-balance text-burgundy">
-          Mảnh ghép ký ức
-        </h2>
-        <div className="mt-[26px] mb-[18px] h-px bg-burgundy/15" />
-        <p className="text-[15px] leading-[1.8] text-ink-soft">
+        <p className="mt-4 text-[15px] leading-[1.8] text-surface/70">
           Những tấm ảnh rời rạc, xếp cạnh nhau thành một năm tháng.
         </p>
 
         {total === 0 ? (
-          <div className="mt-8 border border-dashed border-hairline p-10 text-center">
-            <p className="text-[15px] text-ink-soft italic">Album còn trống.</p>
-            <p className="mt-2 text-[13px] text-ink-faint">
-              Tải ảnh lên qua POST /api/uploads rồi tạo bản ghi ở /api/photos.
-            </p>
+          <div className="mt-8 border border-dashed border-surface/20 p-10 text-center">
+            <p className="text-[15px] text-surface/60 italic">Album còn trống.</p>
           </div>
         ) : (
           <>
-            <p className="mt-3.5 mb-[26px] text-[11px] tracking-[0.2em] text-ink-soft/55 uppercase">
+            <p className="mt-3.5 mb-[26px] text-[11px] tracking-[0.2em] text-surface/45 uppercase">
               Vuốt ngang để lật — {total} tấm
             </p>
 
@@ -275,7 +266,7 @@ export function MemoryMosaic({ photos: all }: { photos: Photo[] }) {
             <div className="mt-1 flex items-center justify-between">
               <span
                 aria-live="polite"
-                className="text-[11px] tracking-[0.2em] text-ink-soft/60 tabular-nums"
+                className="text-[11px] tracking-[0.2em] text-surface/50 tabular-nums"
               >
                 {String(pos + 1).padStart(2, '0')} /{' '}
                 {String(total).padStart(2, '0')}
@@ -286,7 +277,7 @@ export function MemoryMosaic({ photos: all }: { photos: Photo[] }) {
                   onClick={() => advance(-1)}
                   disabled={total < 2}
                   aria-label="Tấm trước"
-                  className="rounded-frame grid h-[34px] w-[34px] place-items-center border border-gold/60 text-gold-deep transition-colors duration-300 hover:bg-gold/12 disabled:opacity-40"
+                  className="rounded-frame grid h-[34px] w-[34px] place-items-center border border-gold/60 text-gold transition-colors duration-300 hover:bg-gold/12 disabled:opacity-40"
                 >
                   <CaretLeftIcon size={15} />
                 </button>
@@ -295,7 +286,7 @@ export function MemoryMosaic({ photos: all }: { photos: Photo[] }) {
                   onClick={() => advance(1)}
                   disabled={total < 2}
                   aria-label="Tấm sau"
-                  className="rounded-frame grid h-[34px] w-[34px] place-items-center border border-gold/60 text-gold-deep transition-colors duration-300 hover:bg-gold/12 disabled:opacity-40"
+                  className="rounded-frame grid h-[34px] w-[34px] place-items-center border border-gold/60 text-gold transition-colors duration-300 hover:bg-gold/12 disabled:opacity-40"
                 >
                   <CaretRightIcon size={15} />
                 </button>
@@ -303,7 +294,6 @@ export function MemoryMosaic({ photos: all }: { photos: Photo[] }) {
             </div>
           </>
         )}
-      </div>
-    </section>
+    </div>
   );
 }

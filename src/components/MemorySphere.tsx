@@ -4,6 +4,7 @@ import { useReducedMotion } from 'motion/react';
 import { useEffect, useRef, useState } from 'react';
 import { assetUrl } from '@/lib/api';
 import type { Photo } from '@/lib/types';
+import { MemoryMosaic } from './MemoryMosaic';
 
 type Props = {
   title: string;
@@ -503,6 +504,10 @@ export function MemorySphere({ title, intro, items }: Props) {
             <p className="mt-4 text-[11px] tracking-[0.2em] text-surface/35 uppercase tabular-nums">
               {items.length} khoảnh khắc — kéo để xoay, chạm để xem
             </p>
+          </div>
+
+          <div className="mt-20">
+            <MemoryMosaic photos={items} />
           </div>
         </>
       )}
